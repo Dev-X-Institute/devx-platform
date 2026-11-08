@@ -24,7 +24,7 @@ See `AGENTS.md` for the rules that apply to AI coding agents.
 ## Review ownership
 
 | Area | Owner | Reviewer |
-|---|---|---|
+| --- | --- | --- |
 | `apps/*-web`, `packages/ui` | David | Donald |
 | `supabase/`, `packages/core` | Donald | David |
 | `packages/ai` | Godfred | Donald |
