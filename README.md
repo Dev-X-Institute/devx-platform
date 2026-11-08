@@ -5,7 +5,7 @@ Currently active: **education-web** ([Milestone 0 to 4 plan](docs/education-mile
 
 ## What is where
 
-```
+```text
 apps/
   education-web/     React + Vite + Tailwind (David)
 packages/
@@ -30,7 +30,7 @@ Change a package once and every app that uses it gets the change.
 ## Everyday commands
 
 | Command | What it does |
-|---|---|
+| --- | --- |
 | `npm run dev:education` | Run the education app locally |
 | `npm run typecheck` | Check types in every app and package |
 | `npm run build` | Build everything (CI runs this on every pull request) |
