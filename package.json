@@ -12,7 +12,7 @@
     "dev:education": "npm run dev -w education-web"
   },
   "devDependencies": {
-    "only-allow": "1.2.1",
+    "only-allow": "1.2.2",
     "turbo": "^2.11.10",
     "typescript": "^7.0.2"
   },
