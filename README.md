@@ -1,7 +1,7 @@
 # DevX Platform
 
 One repository for all DevX Solutions apps and the packages they share.
-Currently active: **education-web** (Milestone 0 to 4 plan in `docs/`).
+Currently active: **education-web** ([Milestone 0 to 4 plan](docs/education-milestone-plan.md), with [review notes](docs/education-milestone-plan-review.md)).
 
 ## What is where
 
