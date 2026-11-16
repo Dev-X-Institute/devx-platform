@@ -1,7 +1,58 @@
-node_modules
-dist
-.turbo
-.env
-.env.local
+# Dependencies, builds and caches
+node_modules/
+dist/
+.turbo/
+.cache/
+coverage/
+*.tsbuildinfo
+
+# Browser test output and local working artifacts
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+.artifacts/
+.tmp/
+tmp/
 *.log
+
+# Environment secrets (keep sanitized example files)
+.env
+.env.*
+!.env.example
+!.env.*.example
+!.env.sample
+!.env.*.sample
+!.env.template
+!.env.*.template
+
+# Local credentials and private keys
+.aws/
+.ssh/
+.gnupg/
+.netrc
+.npmrc.local
+secrets/
+credentials.json
+credentials.*.json
+*service-account*.json
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+
+# Generated demo downloads
+student-payments.csv
+student-report.pdf
+fee-reminder-draft.txt
+report-delivery-draft.csv
+
+# Operating system and editor leftovers
 .DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*~
