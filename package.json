@@ -3,7 +3,10 @@
   "private": true,
   "version": "0.1.0",
   "description": "DevX Solutions monorepo: all apps and shared packages",
-  "workspaces": ["apps/*", "packages/*"],
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "preinstall": "npx only-allow npm",
     "dev": "turbo run dev",
@@ -12,6 +15,7 @@
     "dev:education": "npm run dev -w education-web"
   },
   "devDependencies": {
+    "@types/node": "26.6.6",
     "only-allow": "1.2.1",
     "turbo": "^2.11.10",
     "typescript": "^7.0.2"
