@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 
-const routes = ["sign-in", "student-home", "course", "quiz", "teacher", "admin", "fees", "shop", "reports", "parent"];
+const routes = ["sign-in", "student-home", "course", "quiz", "teacher", "admin", "fees", "shop", "reports", "parent", "progress", "students", "teacher-quizzes"];
 for (const route of routes) {
   test(`${route} renders without errors or page overflow`, async ({ page }, info) => {
     const errors: string[] = [];
@@ -9,6 +9,11 @@ for (const route of routes) {
     await page.goto(`/#${route}`);
     await expect(page.locator("main")).toBeVisible();
     await expect(page.locator("main")).not.toBeEmpty();
+    await page.evaluate(() => document.fonts.ready);
+    expect(await page.evaluate(() => getComputedStyle(document.body).fontFamily)).toContain("Manrope Variable");
+    if (["student-home", "teacher", "admin", "progress"].includes(route)) {
+      await expect(page.locator(".analytics-card .recharts-surface")).toBeVisible();
+    }
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: info.outputPath(`${route}.png`), fullPage: true });
     expect(errors).toEqual([]);
@@ -21,7 +26,47 @@ test("role selection opens the administrator dashboard", async ({ page }) => {
   await page.getByLabel("Email", { exact: true }).fill("demo@school.edu.gh");
   await page.getByLabel("Password", { exact: true }).fill("preview-password");
   await page.getByRole("button", { name: "Sign in as administrator", exact: true }).first().click();
-  await expect(page.getByRole("heading", { name: "Welcome, [ADMIN NAME]", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your school, at a glance.", exact: true })).toBeVisible();
+});
+
+test("activity filters update the chart summary and accessible table", async ({ page }) => {
+  await page.goto("/#student-home");
+  const analytics = page.locator(".analytics-card");
+  await expect(analytics.getByText("240 minutes of learning")).toBeVisible();
+  await analytics.getByText("View data table", { exact: false }).click();
+  await expect(analytics.getByRole("row", { name: "Mon 25", exact: true })).toBeVisible();
+  await page.getByLabel("Activity metric").selectOption("lessons");
+  await expect(analytics.getByText("12 lessons studied")).toBeVisible();
+  await expect(analytics.getByRole("row", { name: "Mon 1", exact: true })).toBeVisible();
+  await expect(analytics.getByRole("columnheader", { name: "Lessons studied", exact: true })).toBeVisible();
+});
+
+test("fee chart sorting preserves class values and offers keyboard access", async ({ page }) => {
+  await page.goto("/#admin");
+  const analytics = page.locator(".analytics-card");
+  await analytics.getByText("View data table", { exact: false }).focus();
+  await page.keyboard.press("Enter");
+  await expect(analytics.getByRole("table")).toBeVisible();
+  await expect(analytics.locator("tbody tr").first()).toHaveText("JHS 178");
+  await page.getByLabel("Collection order").selectOption("highest");
+  await expect(analytics.locator("tbody tr").first()).toHaveText("JHS 391");
+  await expect(analytics.getByRole("row", { name: "JHS 2 64", exact: true })).toBeVisible();
+});
+
+test("analytics and navigation work with reduced motion and narrow viewports", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.setViewportSize({ width: 320, height: 740 });
+  await page.goto("/#student-home");
+  await expect(page.locator(".analytics-card .recharts-surface")).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.getByRole("button", { name: "Menu", exact: true }).click();
+  await expect(page.getByRole("navigation", { name: "Main navigation" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("button", { name: "Menu", exact: true })).toHaveAttribute("aria-expanded", "false");
+  await page.setViewportSize({ width: 812, height: 375 });
+  await page.goto("/#admin");
+  await expect(page.locator(".analytics-card .recharts-surface")).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
 test("lesson completion persists across reloads", async ({ page }) => {
@@ -29,7 +74,7 @@ test("lesson completion persists across reloads", async ({ page }) => {
   await page.getByRole("button", { name: "Read the lesson" }).click();
   await expect(page.getByText("Forces are measured in newtons", { exact: false })).toBeVisible();
   await page.getByRole("button", { name: "Mark lesson complete" }).click();
-  await expect(page.getByText("3 of 8 lessons complete")).toBeVisible();
+  await expect(page.getByText("3 of 4 lessons complete")).toBeVisible();
   await page.reload();
   await expect(page.getByRole("button", { name: "Lesson completed" })).toBeDisabled();
 });
@@ -85,7 +130,7 @@ test("shop item editing and parent orders share the same inventory", async ({ pa
   await page.getByRole("button", { name: "Review order and pay" }).click();
   await page.getByRole("button", { name: "Place demo order" }).click();
   await page.goto("/#shop");
-  await expect(page.getByText("School backpack × 1 for [STUDENT NAME]", { exact: true })).toBeVisible();
+  await expect(page.getByText("School backpack × 1 for Student 2", { exact: true })).toBeVisible();
 });
 
 test("teacher reviews the local sample draft before approval", async ({ page }) => {

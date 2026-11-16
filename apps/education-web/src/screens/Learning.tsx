@@ -3,32 +3,35 @@ import type { EducationRole } from "@devx/core";
 import type { Navigate } from "../App";
 import { Brand, Card, PageHeader, ProgressBar, ScreenPicker } from "../components";
 import { lessons, questions, school, type ScreenProps } from "../demo";
+import { Icon } from "../icons";
+import { LearningArt, SubjectArt } from "../illustrations";
+import { AnalyticsPanel } from "../AnalyticsPanel";
 
 export function SignIn({ navigate, onRole }: { navigate: Navigate; onRole: (role: EducationRole) => void }) {
   const [role, setRole] = useState<EducationRole>("student");
   const enter = (selected: EducationRole) => { onRole(selected); navigate(selected === "student" ? "student-home" : selected === "teacher" ? "teacher" : "admin"); };
   return <div className="sign-in">
-    <section className="sign-in-brand"><Brand /><div className="sign-in-message"><h1>Learning that fits every classroom.</h1><p>Lessons, quizzes and progress in one place for students and teachers.</p></div><p className="sign-in-school">{school}</p></section>
+    <section className="sign-in-brand"><Brand /><div className="sign-in-message"><LearningArt /><h1>Learning that fits every classroom.</h1><p>Lessons, quizzes and progress in one place for students and teachers.</p></div><p className="sign-in-school"><Icon name="school" />{school}</p></section>
     <section className="sign-in-panel"><div className="sign-in-form"><h2>Welcome back</h2><p className="sign-in-subtitle muted">Sign in to continue.</p>
-      <div className="role-tabs" aria-label="Sign-in role">{(["student", "teacher", "admin"] as const).map(r => <button key={r} className={role === r ? "selected" : ""} aria-pressed={role === r} onClick={() => setRole(r)}>{r === "admin" ? "Admin" : r.charAt(0).toUpperCase() + r.slice(1)}</button>)}</div>
+      <div className="role-tabs" aria-label="Sign-in role">{(["student", "teacher", "admin"] as const).map(r => <button key={r} className={role === r ? "selected" : ""} aria-pressed={role === r} onClick={() => setRole(r)}><Icon name={r === "student" ? "book" : r === "teacher" ? "school" : "shield"} size={17} />{r === "admin" ? "Admin" : r.charAt(0).toUpperCase() + r.slice(1)}</button>)}</div>
       <form onSubmit={e => { e.preventDefault(); enter(role); }}>
         <label>Email<input name="email" type="email" placeholder="you@school.edu.gh" autoComplete="username" required /></label>
         <label>Password<input name="password" type="password" placeholder="Your password" autoComplete="current-password" required /></label>
         <button className="button primary full" type="submit">Sign in as {role === "admin" ? "administrator" : role}</button>
       </form>
-      <button className="text-button alternate-role" onClick={() => enter("teacher")}>Sign in as teacher</button><button className="text-button alternate-role" onClick={() => enter("admin")}>Sign in as administrator</button>
-      <p className="join-note muted">New here? Join a class with your course code.</p>
+      <p className="join-note muted">Choose your role to explore your workspace.</p>
       <div className="preview-entry"><p className="demo-label">Frontend preview · use any email and password</p><ScreenPicker value="sign-in" navigate={navigate} /></div>
     </div></section>
   </div>;
 }
 
 export function StudentHome({ navigate, demo }: ScreenProps) {
-  const science = demo.data.completed.length >= 3 ? Math.round(demo.data.completed.length / 8 * 100) : 38;
-  return <><PageHeader eyebrow="Student home" title="Good afternoon, [STUDENT NAME]" />
-    <div className="home-top"><Card className="continue-card"><p className="card-kicker">Continue learning</p><h2>Integrated Science</h2><p className="lesson-subtitle">Lesson 3: Forces and motion</p><ProgressBar value={science} /><button className="button white" onClick={() => navigate("course")}>Resume lesson</button></Card>
-      <Card className="due-card"><div><p className="card-kicker">Due Friday</p><h2>Forces and motion quiz</h2><p className="muted">5 questions</p></div><button className="text-button" onClick={() => navigate("quiz")}>{demo.data.quizScore !== null ? "Retake quiz" : "Start quiz"}</button></Card></div>
-    <h2 className="section-heading">My courses</h2><div className="course-cards">{[["Mathematics", 72], ["English Language", 55], ["Integrated Science", science]].map(([title, value]) => <button className="card course-card" key={title} onClick={() => navigate(title === "Integrated Science" ? "course" : "progress")}><h3>{title}</h3><p className="muted">[TEACHER NAME]</p><ProgressBar value={Number(value)} label={`${title} progress`} /><p className="muted">{value}% complete</p></button>)}</div>
+  const science = Math.round(demo.data.completed.length / lessons.length * 100);
+  return <><PageHeader eyebrow="Student home / JHS 2" title="A little progress, every day." />
+    <div className="home-top"><Card className="continue-card"><div className="continue-copy"><p className="card-kicker"><Icon name="book" size={17} />Continue learning</p><h2>Integrated Science</h2><p className="lesson-subtitle">Lesson 3: Forces and motion</p><div className="hero-progress"><ProgressBar value={science} /><span>{science}% complete</span></div><button className="button white" onClick={() => navigate("course")}>Resume lesson<Icon name="next" size={18} /></button></div><LearningArt compact /></Card>
+      <Card className="due-card"><div><div className="due-heading"><span className="due-icon"><Icon name="quiz" size={24} /></span><p className="due-label">Due Friday</p></div><h2>Forces and motion quiz</h2><p className="muted">5 questions to check your understanding.</p></div><button className="text-button" onClick={() => navigate("quiz")}>{demo.data.quizScore !== null ? "Retake quiz" : "Start quiz"}<Icon name="next" size={18} /></button></Card></div>
+    <div className="section-title"><h2>My courses</h2><span className="muted">3 courses this term</span></div><div className="course-cards">{[["Mathematics", 72], ["English Language", 55], ["Integrated Science", science]].map(([title, value]) => <button className="card course-card" key={title} onClick={() => navigate(title === "Integrated Science" ? "course" : "progress")}><div className="course-card-top"><SubjectArt subject={String(title)} /><Icon name="arrow" size={19} /></div><h3>{title}</h3><p className="muted">JHS 2 / Class teacher</p><div className="course-progress-label"><span>Course progress</span><strong>{value}%</strong></div><ProgressBar value={Number(value)} label={`${title} progress`} /></button>)}</div>
+    <div className="student-bottom"><AnalyticsPanel kind="activity" /><Card className="learning-note"><span className="note-icon"><Icon name="sparkles" size={23} /></span><h2>Make space for learning.</h2><p className="muted">Short, regular practice helps you remember more. Pick one lesson and take it at your own pace.</p><div className="study-step"><Icon name="book" />Read the lesson</div><div className="study-step"><Icon name="quiz" />Check what you know</div><button className="button outline" onClick={() => navigate("progress")}>View my progress<Icon name="next" size={17} /></button></Card></div>
   </>;
 }
 
@@ -37,8 +40,8 @@ export function Course({ navigate, demo, notify }: ScreenProps) {
   const [reading, setReading] = useState(false);
   const lesson = lessons[selected]!;
   const completed = demo.data.completed.includes(selected);
-  return <><button className="text-button back-link" onClick={() => navigate("student-home")}>‹ Back to home</button><PageHeader eyebrow="JHS 2 · [TEACHER NAME]" title="Integrated Science" />
-    <div className="course-layout"><div className="lesson-list"><Card><ProgressBar value={demo.data.completed.length / 8 * 100} /><p className="muted">{demo.data.completed.length} of 8 lessons complete</p></Card>
+  return <><button className="text-button back-link" onClick={() => navigate("student-home")}><Icon name="back" size={18} />Back to home</button><PageHeader eyebrow="JHS 2 / Class teacher" title="Integrated Science" />
+    <div className="course-layout"><div className="lesson-list"><Card><ProgressBar value={demo.data.completed.length / lessons.length * 100} /><p className="muted">{demo.data.completed.length} of {lessons.length} lessons complete</p></Card>
       {lessons.map((item, i) => <button key={item.title} className={`card lesson-item ${i === selected ? "selected" : ""}`} aria-pressed={i === selected} onClick={() => { setSelected(i); setReading(false); }}><span className={`lesson-number ${demo.data.completed.includes(i) ? "complete" : i === selected ? "current" : ""}`}>{i + 1}</span><span><strong>{item.title}</strong><span className="muted">{demo.data.completed.includes(i) ? "Completed" : i === selected ? "In progress, 12 min left" : "Not started"}</span></span></button>)}
     </div><Card className="lesson-detail"><p className="card-kicker">Lesson {selected + 1}</p><h2>{lesson.title}</h2><div className={`lesson-reading ${reading ? "expanded" : ""}`}>{reading ? <><h3>{lesson.title}</h3><p>{lesson.reading}</p><button className="text-button" onClick={() => setReading(false)}>Close reading</button></> : <button onClick={() => setReading(true)} className="reading-button"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 12C18 8 9 8 5 10v27c5-2 13-2 19 2 6-4 14-4 19-2V10c-4-2-13-2-19 2Zm0 0v27" fill="none" stroke="currentColor" strokeWidth="2.5" /></svg><span>Read the lesson</span><span className="reading-duration">12 minute reading</span></button>}</div><p className="lesson-summary muted">{lesson.summary}</p><div className="actions"><button className="button primary" disabled={completed} onClick={() => { demo.update(d => ({ completed: [...new Set([...d.completed, selected])] })); notify("Lesson marked complete. Your progress has been saved."); }}>{completed ? "Lesson completed" : "Mark lesson complete"}</button><button className="button outline" onClick={() => navigate("quiz")}>Take quiz</button></div></Card></div>
   </>;
@@ -63,5 +66,16 @@ export function Quiz({ navigate, demo, notify }: ScreenProps) {
 }
 
 export function Progress({ demo, navigate }: ScreenProps) {
-  return <><PageHeader eyebrow="Student progress" title="My progress" /><div className="course-cards">{[["Mathematics", 72], ["English Language", 55], ["Integrated Science", demo.data.completed.length / 8 * 100]].map(([name, value]) => <Card key={name}><h2>{name}</h2><ProgressBar value={Number(value)} /><p className="muted">{Math.round(Number(value))}% complete</p></Card>)}</div><Card className="section-spaced"><h2>Quiz results</h2>{demo.data.quizScore === null ? <p className="muted">Complete your first quiz to see your result here.</p> : <div className="list-row"><strong>Forces and motion</strong><span>{demo.data.quizScore} / 5</span><span>{demo.data.quizScore * 20}%</span></div>}<button className="button outline" onClick={() => navigate("quiz")}>Take quiz</button></Card></>;
+  const courses: [string, number][] = [["Mathematics", 72], ["English Language", 55], ["Integrated Science", demo.data.completed.length / lessons.length * 100]];
+  return <>
+    <PageHeader eyebrow="Student progress" title="My progress" />
+    <div className="course-cards">{courses.map(([name, value]) => <Card key={name}>
+      <SubjectArt subject={name} /><h2>{name}</h2><ProgressBar value={value} /><p className="muted">{Math.round(value)}% complete</p>
+    </Card>)}</div>
+    <div className="student-bottom"><AnalyticsPanel kind="activity" /><Card>
+      <h2>Quiz results</h2>
+      {demo.data.quizScore === null ? <div className="quiz-empty"><Icon name="quiz" size={36} /><p className="muted">Complete your first quiz to see your result here.</p></div> : <div className="list-row"><strong>Forces and motion</strong><span>{demo.data.quizScore} / 5</span><span>{demo.data.quizScore * 20}%</span></div>}
+      <button className="button outline" onClick={() => navigate("quiz")}>Take quiz</button>
+    </Card></div>
+  </>;
 }

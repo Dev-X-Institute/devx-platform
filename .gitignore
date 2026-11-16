@@ -16,6 +16,11 @@ playwright/.cache/
 tmp/
 *.log
 
+# Downloaded skill kits and local design-check state
+.agents/skills/
+.codex/skills/
+.taste-skill/
+
 # Environment secrets (keep sanitized example files)
 .env
 .env.*

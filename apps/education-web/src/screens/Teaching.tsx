@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { MockAiProvider } from "@devx/ai";
 import { Badge, Card, ClassSelect, PageHeader, ProgressBar, Stats } from "../components";
-import { money, type ScreenProps } from "../demo";
+import { lessons, money, type ScreenProps } from "../demo";
+import { Icon } from "../icons";
+import { AnalyticsPanel } from "../AnalyticsPanel";
 
 const ai = new MockAiProvider();
 const studentProgress = [82, 64, 31];
@@ -20,9 +22,9 @@ export function TeacherDashboard({ demo, navigate, notify }: ScreenProps) {
     finally { setLoading(false); }
   };
   return <><PageHeader eyebrow="Class dashboard" title="JHS 2 Integrated Science" />
-    <Stats values={[["Students", 34], ["Lessons published", 8], ["Quizzes to review", demo.data.drafts.length && !demo.data.published ? 3 : 2], ["Submissions to grade", 5]]} />
-    <div className="teacher-layout"><Card><h2>Student progress</h2><div className="table-wrap"><table className="progress-table"><caption className="sr-only">Student lesson progress and recent activity</caption><tbody>{studentProgress.map((progress, i) => <tr key={i}><th scope="row">Student {i + 1}</th><td><ProgressBar value={progress} label={`Student ${i + 1} progress`} /></td><td>{progress}%</td><td className="muted">{["Today", "Yesterday", "6 days ago"][i]}</td><td><Badge tone={i === 2 ? "amber" : "green"}>{i === 2 ? "Needs help" : "On track"}</Badge></td></tr>)}</tbody></table></div></Card>
-    <Card className="generator-card"><h2>AI quiz generator</h2><form onSubmit={e => { e.preventDefault(); void generate(); }}><label className="muted">Paste lesson text<textarea value={text} onChange={e => setText(e.target.value)} placeholder="Paste or write lesson content here" minLength={20} required rows={6} /></label>{error && <p className="form-error" role="alert">{error}</p>}<button className="button primary full" disabled={loading}>{loading ? "Generating draft…" : "Generate draft questions"}</button></form><p className="muted generator-note">Drafts need your approval before students see them.</p><p className="demo-label">Preview uses a local sample generator.</p>{demo.data.drafts.length > 0 && <button className="button outline full" onClick={() => navigate("teacher-quizzes")}>Review {demo.data.drafts.length} draft questions</button>}</Card></div>
+    <Stats values={[["Students", 34], ["Lessons published", lessons.length], ["Quizzes to review", demo.data.drafts.length && !demo.data.published ? 3 : 2], ["Submissions to grade", 5]]} />
+    <div className="teacher-layout"><div className="panel-stack"><AnalyticsPanel kind="performance" /><Card><div className="card-heading"><h2>Student progress</h2><Icon name="students" /></div><div className="table-wrap"><table className="progress-table"><caption className="sr-only">Student lesson progress and recent activity</caption><tbody>{studentProgress.map((progress, i) => <tr key={i}><th scope="row">Student {i + 1}</th><td><ProgressBar value={progress} label={`Student ${i + 1} progress`} /></td><td>{progress}%</td><td className="muted">{["Today", "Yesterday", "6 days ago"][i]}</td><td><Badge tone={i === 2 ? "amber" : "green"}>{i === 2 ? "Needs help" : "On track"}</Badge></td></tr>)}</tbody></table></div></Card></div>
+    <Card className="generator-card"><span className="note-icon"><Icon name="sparkles" size={23} /></span><h2>AI quiz generator</h2><p className="muted generator-intro">Turn a lesson into a draft you can review.</p><form onSubmit={e => { e.preventDefault(); void generate(); }}><label className="muted">Paste lesson text<textarea value={text} onChange={e => setText(e.target.value)} placeholder="Paste or write lesson content here" minLength={20} required rows={6} /></label>{error && <p className="form-error" role="alert">{error}</p>}<button className="button primary full" disabled={loading}>{loading ? "Generating draft…" : "Generate draft questions"}</button></form><p className="muted generator-note">Drafts need your approval before students see them.</p><p className="demo-label">Preview uses a local sample generator.</p>{demo.data.drafts.length > 0 && <button className="button outline full" onClick={() => navigate("teacher-quizzes")}>Review {demo.data.drafts.length} draft questions</button>}</Card></div>
   </>;
 }
 
