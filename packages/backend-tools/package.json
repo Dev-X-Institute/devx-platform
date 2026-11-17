@@ -1,0 +1,12 @@
+{
+  "name": "@devx/backend-tools",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Repository-local Supabase CLI tooling",
+  "scripts": {
+    "supabase": "cd ../.. && supabase"
+  },
+  "devDependencies": {
+    "supabase": "3.2.0"
+  }
+}

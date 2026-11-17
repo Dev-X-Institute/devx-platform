@@ -1,6 +1,6 @@
 # Platform AI architecture
 
-**Status:** Proposed foundation; no production AI provider or edge function is implemented yet.
+**Status:** Education Edge Function scaffold is in place; provider selection and production integration remain pending.
 
 ## Goals
 
@@ -81,7 +81,17 @@ Use this pattern only when work exceeds a short request/response interaction or 
 - A small invocation adapter that accepts an already-created Supabase client and calls a function by name.
 - The current mock provider for local UI previews, clearly marked as mock-only.
 
-Apps should depend on this contract instead of importing provider SDKs or duplicating transport/error conventions. Keep prompts and education-specific data types out of the shared package unless a second app has the same semantics. Any new runtime dependency belongs in `packages/ai/package.json` and needs a documented reason.
+Apps should depend on this contract instead of importing provider SDKs or duplicating transport/error conventions. Keep prompts and education-specific data types out of the shared package unless a second app has the same semantics. Any dependency imported by `packages/ai` belongs in `packages/ai/package.json` and needs a documented reason.
+
+## Backend and AI tooling
+
+- **Supabase CLI:** `@devx/backend-tools` owns the pinned `supabase` development dependency. Run commands from the repository root with `npm run supabase --workspace @devx/backend-tools -- <command>`. This provides a consistent CLI for local Supabase, migrations, and Edge Function development without adding it to browser app bundles.
+- **Frontend/backend client:** `@supabase/supabase-js` is already declared by `@devx/core`, which exposes `createBackend()`. Apps use that shared client rather than importing Supabase directly.
+- **Edge Function runtime:** Supabase Edge Functions run on Deno. Keep their imports and runtime configuration in each function's `deno.json` (or supported import map), as recommended by Supabase. Do not add server-only function dependencies to the browser-facing `@devx/ai` package.
+- **AI provider calls:** No provider has been approved yet. Start with the server-side provider interface and standard `fetch` if the approved provider exposes a suitable HTTP API. Add a provider SDK only after provider/privacy eligibility is settled, and declare it in the Edge Function's `deno.json` or the specific server-side package that imports it. Do not add a model SDK to the frontend or shared browser package.
+- **Runtime validation:** Define and validate request and response schemas at the function boundary. Add a schema library only if its runtime benefit justifies a dependency shared across functions; otherwise use small explicit validators for the narrow initial contract.
+
+The Supabase CLI is a development tool, so it belongs in the backend tooling workspace's `devDependencies`. Provider SDKs are runtime code and belong with the server function that imports them, not in the CLI/tooling package. The exact dependency rationale is recorded here so future provider choices can be reviewed before installation.
 
 ## Edge Function organization
 
@@ -122,7 +132,7 @@ The education app is the first consumer, not the owner of the shared AI transpor
 
 Prompts, education permissions, lesson-scoped grounding, teacher approval, student-facing copy, and education-specific evaluation examples belong to the education feature/function. The common request envelope, authentication pattern, provider adapter, output validation mechanics, rate limits, and operational metadata can be reused by other apps.
 
-The current `MockAiProvider` supports the quiz generator's local preview. It is not a production provider. The study helper and production Edge Function path are not implemented yet.
+The current `MockAiProvider` still supports the quiz generator's local preview. A server-side `education-ai` Edge Function scaffold now accepts `quiz.generate` and `lesson.explain`, verifies Supabase Auth, checks the trusted education role claim, applies input/output bounds, and requires an explicit provider approval flag before calling an OpenAI-compatible endpoint. The provider is still unselected and unconfigured, and the frontend is not wired to this function yet. There are no course/enrollment tables, so course-level authorization must be added before live use with real lessons or student records.
 
 ## Delivery sequence
 
