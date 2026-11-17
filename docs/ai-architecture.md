@@ -134,6 +134,36 @@ Prompts, education permissions, lesson-scoped grounding, teacher approval, stude
 
 The current `MockAiProvider` still supports the quiz generator's local preview. A server-side `education-ai` Edge Function scaffold now accepts `quiz.generate` and `lesson.explain`, verifies Supabase Auth, checks the trusted education role claim, applies input/output bounds, and requires an explicit provider approval flag before calling an OpenAI-compatible endpoint. The provider is still unselected and unconfigured, and the frontend is not wired to this function yet. There are no course/enrollment tables, so course-level authorization must be added before live use with real lessons or student records.
 
+## Other education features under consideration
+
+**Planning only:** the items below are proposals for discovery and product decisions. They are not implementation commitments. Several are ordinary backend workflows and should not use a language model just because they appear on an AI feature list.
+
+| Proposed feature | Recommended approach | Important boundary / review |
+| --- | --- | --- |
+| Generate student performance summaries | AI draft from a minimal, server-prepared set of assessment and progress facts | Show the time period and source facts; distinguish measured facts from generated wording. Teacher reviews before sharing or saving as an official record. |
+| Identify students whose performance is declining | Deterministic trend rules over validated scores/progress, with configurable time windows and thresholds | Return the evidence and rule that triggered the flag. Treat it as a review prompt, not a diagnosis or automated intervention. Teacher confirms next steps. |
+| Send automated school-fee reminders | Deterministic balance lookup, schedule, and approved message template | The backend computes the amount and recipient. Require correct guardian-to-student links, deduplication, delivery status, and an appropriate approval policy. Do not use an LLM to calculate balances or decide whom to contact. |
+| Generate draft report-card comments | AI draft grounded in teacher-selected evidence and an agreed rubric | Teacher edits and approves every comment. Do not infer traits, behavior, causes, or achievement that are absent from the supplied evidence. Preserve the evidence period and draft provenance. |
+| AI assistant for parents and school administrators | Authenticated retrieval assistant with separate parent and admin policies and allowlisted read tools | Parent access is limited to linked children; admin access follows school scope. Retrieve only permitted records. Require confirmation for writes or messages; never expose a general-purpose database or agent tool. |
+| Automate attendance notifications | Deterministic event-driven workflow triggered by attendance state changes | Verify guardian and contact preferences, deduplicate retries, record delivery outcomes, and define correction/escalation handling. The model must not decide attendance status or trigger messages. |
+
+### Shared foundation these features may reuse
+
+- Reuse the Supabase Auth boundary, app-owned Edge Function entry points, validated contracts, safe operational metadata, provider adapter, and provider approval gate described above.
+- Build sensitive insights from server-side queries that enforce school, role, and student relationships. Send a minimal prepared payload to a model only when the approved provider and data policy allow it; never let the model query the database directly.
+- Keep generated prose separate from source facts. Return structured output that can be displayed alongside its time range and evidence; require the appropriate human review before a result becomes an official record or is sent externally.
+- Use a queue/worker for scheduled or durable work. Store an idempotency key and task/message state so retries cannot create duplicate drafts, flags, or notifications. The queue is an execution tool; deterministic feature rules remain app-owned.
+- Keep parent and administrator assistants as separate permission profiles even if they share the same retrieval and model infrastructure. The caller's role and record scope come from trusted backend state, never from prompt text or a client-supplied role.
+
+### Suggested discovery order
+
+1. **Specify the deterministic workflows first:** define attendance state transitions and fee-reminder rules, recipients, timing, deduplication, opt-out/correction behavior, approvals, and audit requirements. These provide clear acceptance criteria without a model.
+2. **Specify declining-performance flags:** agree the exact metrics, comparison period, minimum data requirements, thresholds, missing-data behavior, and who may view/clear a flag. Validate that thresholds support review rather than high-impact automatic decisions.
+3. **Design teacher-facing AI drafts:** define the evidence schema, rubric, tone, input minimization, review/edit/save flow, and a non-identifying evaluation set for summaries and report-card comments. Confirm provider eligibility before using real student data.
+4. **Scope role-specific assistants last:** list parent and administrator tasks separately, identify each permitted data source and tool, then define refusal behavior and human confirmation for every write or external action. Start with read-only answers to bounded questions before considering agentic workflows.
+
+Before selecting any of these for a pilot, record a feature owner, authorized roles, data fields, output destination, review/approval gate, evaluation cases, failure behavior, and retention policy. No new model provider or runtime dependency is selected by this plan.
+
 ## Delivery sequence
 
 1. Agree provider eligibility, privacy terms, and whether the pilot can use real student data. If not approved, keep mock data or defer live AI.
