@@ -4,9 +4,12 @@
   "private": true,
   "description": "Repository-local Supabase CLI tooling",
   "scripts": {
-    "supabase": "cd ../.. && supabase"
+    "supabase": "cd ../.. && supabase",
+    "deno": "cd ../.. && deno",
+    "test:education-ai": "cd ../.. && deno test --config supabase/functions/education-ai/deno.json --allow-env supabase/functions/tests/education-ai_test.ts"
   },
   "devDependencies": {
+    "deno": "2.9.6",
     "supabase": "3.2.0"
   }
 }

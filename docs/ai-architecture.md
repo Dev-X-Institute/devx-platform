@@ -85,7 +85,7 @@ Apps should depend on this contract instead of importing provider SDKs or duplic
 
 ## Backend and AI tooling
 
-- **Supabase CLI:** `@devx/backend-tools` owns the pinned `supabase` development dependency. Run commands from the repository root with `npm run supabase --workspace @devx/backend-tools -- <command>`. This provides a consistent CLI for local Supabase, migrations, and Edge Function development without adding it to browser app bundles.
+- **Supabase CLI and Deno test runner:** `@devx/backend-tools` owns pinned `supabase` and `deno` development dependencies. Run Supabase commands from the repository root with `npm run supabase --workspace @devx/backend-tools -- <command>`. Run the education function suite with `npm run test:education-ai --workspace @devx/backend-tools`. This keeps backend tooling out of browser app bundles.
 - **Frontend/backend client:** `@supabase/supabase-js` is already declared by `@devx/core`, which exposes `createBackend()`. Apps use that shared client rather than importing Supabase directly.
 - **Edge Function runtime:** Supabase Edge Functions run on Deno. Keep their imports and runtime configuration in each function's `deno.json` (or supported import map), as recommended by Supabase. Do not add server-only function dependencies to the browser-facing `@devx/ai` package.
 - **AI provider calls:** No provider has been approved yet. Start with the server-side provider interface and standard `fetch` if the approved provider exposes a suitable HTTP API. Add a provider SDK only after provider/privacy eligibility is settled, and declare it in the Edge Function's `deno.json` or the specific server-side package that imports it. Do not add a model SDK to the frontend or shared browser package.

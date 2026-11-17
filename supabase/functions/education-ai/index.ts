@@ -7,7 +7,8 @@ declare const Deno: {
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info",
+  "Access-Control-Allow-Headers":
+    "authorization, apikey, content-type, x-client-info",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Content-Type": "application/json",
 };
@@ -38,7 +39,12 @@ function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: corsHeaders });
 }
 
-function failure(code: string, status: number, retryable = false, requestId?: string): Response {
+function failure(
+  code: string,
+  status: number,
+  retryable = false,
+  requestId?: string,
+): Response {
   return jsonResponse(status, {
     ok: false,
     ...(requestId ? { requestId } : {}),
@@ -50,23 +56,35 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function validateRequest(value: unknown): AiRequest | null {
-  if (!isRecord(value) || typeof value.feature !== "string" || typeof value.lessonText !== "string") {
+export function validateRequest(value: unknown): AiRequest | null {
+  if (
+    !isRecord(value) || typeof value.feature !== "string" ||
+    typeof value.lessonText !== "string"
+  ) {
     return null;
   }
 
   const lessonText = value.lessonText.trim();
-  if (lessonText.length < 20 || lessonText.length > MAX_LESSON_CHARS) return null;
+  if (lessonText.length < 20 || lessonText.length > MAX_LESSON_CHARS) {
+    return null;
+  }
 
   if (value.feature === "quiz.generate") {
     const count = value.count === undefined ? 5 : value.count;
-    if (!Number.isInteger(count) || (count as number) < 1 || (count as number) > 10) return null;
+    if (
+      !Number.isInteger(count) || (count as number) < 1 ||
+      (count as number) > 10
+    ) return null;
     return { feature: value.feature, lessonText, count: count as number };
   }
 
-  if (value.feature === "lesson.explain" && typeof value.question === "string") {
+  if (
+    value.feature === "lesson.explain" && typeof value.question === "string"
+  ) {
     const question = value.question.trim();
-    if (question.length < 1 || question.length > MAX_QUESTION_CHARS) return null;
+    if (question.length < 1 || question.length > MAX_QUESTION_CHARS) {
+      return null;
+    }
     return { feature: value.feature, lessonText, question };
   }
 
@@ -78,16 +96,25 @@ function getRequiredEnv(name: string): string | null {
   return value ? value : null;
 }
 
-function parseQuizQuestions(content: string, count: number): QuizQuestion[] | null {
+export function parseQuizQuestions(
+  content: string,
+  count: number,
+): QuizQuestion[] | null {
   let parsed: unknown;
   try {
-    const jsonText = content.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+    const jsonText = content.trim().replace(/^```(?:json)?\s*/i, "").replace(
+      /\s*```$/,
+      "",
+    );
     parsed = JSON.parse(jsonText);
   } catch {
     return null;
   }
 
-  if (!isRecord(parsed) || !Array.isArray(parsed.questions) || parsed.questions.length !== count) return null;
+  if (
+    !isRecord(parsed) || !Array.isArray(parsed.questions) ||
+    parsed.questions.length !== count
+  ) return null;
   const questions: QuizQuestion[] = [];
 
   for (const item of parsed.questions) {
@@ -98,7 +125,10 @@ function parseQuizQuestions(content: string, count: number): QuizQuestion[] | nu
       item.question.length > 500 ||
       !Array.isArray(item.options) ||
       item.options.length !== 4 ||
-      !item.options.every((option) => typeof option === "string" && option.trim().length > 0 && option.length <= 300) ||
+      !item.options.every((option) =>
+        typeof option === "string" && option.trim().length > 0 &&
+        option.length <= 300
+      ) ||
       !Number.isInteger(item.answerIndex) ||
       (item.answerIndex as number) < 0 ||
       (item.answerIndex as number) > 3
@@ -114,7 +144,10 @@ function parseQuizQuestions(content: string, count: number): QuizQuestion[] | nu
   return questions;
 }
 
-async function callModel(request: AiRequest, requestId: string): Promise<Response> {
+async function callModel(
+  request: AiRequest,
+  requestId: string,
+): Promise<Response> {
   if (Deno.env.get("AI_PROVIDER_APPROVED") !== "true") {
     return failure("AI_PROVIDER_NOT_APPROVED", 503, false, requestId);
   }
@@ -122,7 +155,9 @@ async function callModel(request: AiRequest, requestId: string): Promise<Respons
   const endpoint = getRequiredEnv("AI_API_URL");
   const apiKey = getRequiredEnv("AI_API_KEY");
   const model = getRequiredEnv("AI_MODEL");
-  if (!endpoint || !apiKey || !model) return failure("AI_PROVIDER_NOT_CONFIGURED", 503, false, requestId);
+  if (!endpoint || !apiKey || !model) {
+    return failure("AI_PROVIDER_NOT_CONFIGURED", 503, false, requestId);
+  }
 
   let url: URL;
   try {
@@ -130,7 +165,10 @@ async function callModel(request: AiRequest, requestId: string): Promise<Respons
   } catch {
     return failure("AI_PROVIDER_NOT_CONFIGURED", 503, false, requestId);
   }
-  if (url.protocol !== "https:" && url.hostname !== "localhost" && url.hostname !== "127.0.0.1") {
+  if (
+    url.protocol !== "https:" && url.hostname !== "localhost" &&
+    url.hostname !== "127.0.0.1"
+  ) {
     return failure("AI_PROVIDER_NOT_CONFIGURED", 503, false, requestId);
   }
 
@@ -163,13 +201,31 @@ async function callModel(request: AiRequest, requestId: string): Promise<Respons
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
   } catch {
-    console.warn(JSON.stringify({ requestId, feature: request.feature, error: "provider_unavailable" }));
+    console.warn(
+      JSON.stringify({
+        requestId,
+        feature: request.feature,
+        error: "provider_unavailable",
+      }),
+    );
     return failure("AI_PROVIDER_UNAVAILABLE", 502, true, requestId);
   }
 
   if (!response.ok) {
-    console.warn(JSON.stringify({ requestId, feature: request.feature, error: "provider_rejected_request", status: response.status }));
-    return failure("AI_PROVIDER_UNAVAILABLE", response.status === 429 ? 429 : 502, response.status === 429 || response.status >= 500, requestId);
+    console.warn(
+      JSON.stringify({
+        requestId,
+        feature: request.feature,
+        error: "provider_rejected_request",
+        status: response.status,
+      }),
+    );
+    return failure(
+      "AI_PROVIDER_UNAVAILABLE",
+      response.status === 429 ? 429 : 502,
+      response.status === 429 || response.status >= 500,
+      requestId,
+    );
   }
 
   let payload: unknown;
@@ -179,7 +235,10 @@ async function callModel(request: AiRequest, requestId: string): Promise<Respons
     return failure("AI_INVALID_RESPONSE", 502, false, requestId);
   }
 
-  if (!isRecord(payload) || !Array.isArray(payload.choices) || !isRecord(payload.choices[0])) {
+  if (
+    !isRecord(payload) || !Array.isArray(payload.choices) ||
+    !isRecord(payload.choices[0])
+  ) {
     return failure("AI_INVALID_RESPONSE", 502, false, requestId);
   }
   const message = payload.choices[0].message;
@@ -189,26 +248,39 @@ async function callModel(request: AiRequest, requestId: string): Promise<Respons
 
   if (isQuiz) {
     const questions = parseQuizQuestions(message.content, request.count!);
-    if (!questions) return failure("AI_INVALID_RESPONSE", 502, false, requestId);
-    return jsonResponse(200, { ok: true, requestId, data: { questions, reviewRequired: true } });
+    if (!questions) {
+      return failure("AI_INVALID_RESPONSE", 502, false, requestId);
+    }
+    return jsonResponse(200, {
+      ok: true,
+      requestId,
+      data: { questions, reviewRequired: true },
+    });
   }
 
   const answer = message.content.trim();
-  if (!answer || answer.length > MAX_ANSWER_CHARS) return failure("AI_INVALID_RESPONSE", 502, false, requestId);
+  if (!answer || answer.length > MAX_ANSWER_CHARS) {
+    return failure("AI_INVALID_RESPONSE", 502, false, requestId);
+  }
   return jsonResponse(200, { ok: true, requestId, data: { answer } });
 }
 
-Deno.serve(async (request: Request) => {
-  if (request.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+export async function handleRequest(request: Request): Promise<Response> {
+  if (request.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
   if (request.method !== "POST") return failure("METHOD_NOT_ALLOWED", 405);
 
   const requestId = crypto.randomUUID();
   const contentLength = Number(request.headers.get("content-length") ?? 0);
-  if (contentLength > MAX_BODY_BYTES) return failure("PAYLOAD_TOO_LARGE", 413, false, requestId);
+  if (contentLength > MAX_BODY_BYTES) {
+    return failure("PAYLOAD_TOO_LARGE", 413, false, requestId);
+  }
 
   const authorization = request.headers.get("authorization");
   const supabaseUrl = getRequiredEnv("SUPABASE_URL");
-  const supabaseKey = getRequiredEnv("SUPABASE_ANON_KEY") ?? getRequiredEnv("SUPABASE_PUBLISHABLE_KEY");
+  const supabaseKey = getRequiredEnv("SUPABASE_ANON_KEY") ??
+    getRequiredEnv("SUPABASE_PUBLISHABLE_KEY");
   if (!authorization?.startsWith("Bearer ") || !supabaseUrl || !supabaseKey) {
     return failure("UNAUTHORIZED", 401, false, requestId);
   }
@@ -216,10 +288,16 @@ Deno.serve(async (request: Request) => {
   const supabase = createClient(supabaseUrl, supabaseKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
-  const { data, error } = await supabase.auth.getUser(authorization.slice("Bearer ".length));
-  if (error || !data.user) return failure("UNAUTHORIZED", 401, false, requestId);
+  const { data, error } = await supabase.auth.getUser(
+    authorization.slice("Bearer ".length),
+  );
+  if (error || !data.user) {
+    return failure("UNAUTHORIZED", 401, false, requestId);
+  }
 
-  const role = data.user.app_metadata?.education_role as EducationRole | undefined;
+  const role = data.user.app_metadata?.education_role as
+    | EducationRole
+    | undefined;
   if (role !== "student" && role !== "teacher" && role !== "admin") {
     return failure("FORBIDDEN", 403, false, requestId);
   }
@@ -236,10 +314,23 @@ Deno.serve(async (request: Request) => {
   }
   const body = validateRequest(rawBody);
   if (!body) return failure("INVALID_REQUEST", 400, false, requestId);
-  if (body.feature === "quiz.generate" && role !== "teacher" && role !== "admin") {
+  if (
+    body.feature === "quiz.generate" && role !== "teacher" && role !== "admin"
+  ) {
     return failure("FORBIDDEN", 403, false, requestId);
   }
 
-  console.info(JSON.stringify({ requestId, feature: body.feature, role, event: "request_accepted" }));
+  console.info(
+    JSON.stringify({
+      requestId,
+      feature: body.feature,
+      role,
+      event: "request_accepted",
+    }),
+  );
   return await callModel(body, requestId);
-});
+}
+
+if ((import.meta as ImportMeta & { main: boolean }).main) {
+  Deno.serve(handleRequest);
+}
