@@ -1,0 +1,21 @@
+/* Primitive values */
+:root {
+  --forest-700: #176348; --forest-800: #104d37; --forest-50: #e9f2e9;
+  --neutral-950: #1e3027; --neutral-600: #5b6a61; --neutral-400: #b2beb3; --neutral-200: #e1e7dd; --neutral-50: #f6f7f3; --neutral-0: #fff;
+  --gold-400: #efb94f; --gold-50: #fcf0d5; --gold-800: #815a18; --red-800: #9c1c1c; --red-50: #f9dada;
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-10: 40px;
+  --font-sm: .8125rem; --font-base: 1rem; --font-lg: 1.25rem; --font-display: 2rem;
+  --radius-sm: 8px; --radius-md: 10px; --radius-lg: 18px; --duration-fast: 160ms; --duration-enter: 220ms; --ease-out: cubic-bezier(.23, 1, .32, 1);
+}
+/* Semantic roles; these are the only palette names components use. */
+:root {
+  --color-action: var(--forest-700); --color-action-hover: var(--forest-800); --color-action-soft: var(--forest-50);
+  --color-text: var(--neutral-950); --color-text-muted: var(--neutral-600); --color-page: var(--neutral-50); --color-surface: var(--neutral-0); --color-border: var(--neutral-200); --color-control-border: var(--neutral-400);
+  --color-warning: var(--gold-800); --color-warning-soft: var(--gold-50); --color-highlight: var(--gold-400); --color-danger: var(--red-800); --color-danger-soft: var(--red-50);
+  --green: var(--color-action); --green-dark: var(--color-action-hover); --mint: var(--color-action-soft); --cream: var(--color-page); --ink: var(--color-text); --muted: var(--color-text-muted); --border: var(--color-border); --white: var(--color-surface); --amber: var(--color-highlight); --amber-soft: var(--color-warning-soft);
+}
+/* Component contracts */
+:root {
+  --control-height: 48px; --radius-control: var(--radius-md); --radius-card: var(--radius-lg); --card-padding: var(--space-6); --section-gap: var(--space-6);
+  --button-bg: var(--color-action); --button-fg: var(--color-surface); --input-border: var(--color-control-border); --focus-ring: var(--color-action); --card-bg: var(--color-surface); --card-border: var(--color-border);
+}

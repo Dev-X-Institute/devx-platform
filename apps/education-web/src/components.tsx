@@ -3,14 +3,14 @@ import { screens, type Navigate, type Screen } from "./App";
 import { school, type Product } from "./demo";
 import { Icon, type IconName } from "./icons";
 
-export function Brand({ schoolName = false }: { schoolName?: boolean }) {
-  return <div className="brand"><span className="brand-mark">D</span><span>{schoolName ? school : "DevX Education"}</span></div>;
+export function Brand({ schoolName = false, name }: { schoolName?: boolean; name?: string }) {
+  return <div className="brand"><span className="brand-mark">D</span><span dir="auto">{schoolName ? name ?? school : "DevX Education"}</span></div>;
 }
 export function ScreenPicker({ value, navigate }: { value: Screen; navigate: Navigate }) {
-  return <label className="screen-picker">Explore screens<select value={value} onChange={e => navigate(e.target.value as Screen)}>{Object.entries(screens).slice(0, 10).map(([key, label]) => <option value={key} key={key}>{label}</option>)}</select></label>;
+  return <label className="screen-picker">Explore screens<select value={value} onChange={e => navigate(e.target.value as Screen)}>{Object.entries(screens).map(([key, label]) => <option value={key} key={key}>{label}</option>)}</select></label>;
 }
-export function PageHeader({ eyebrow, title, children }: { eyebrow: string; title: string; children?: ReactNode }) {
-  return <header className="page-header"><div><p className="eyebrow">{eyebrow}</p><h1>{title}</h1></div><div className="header-actions"><span className="school-name"><Icon name="school" size={18} />{school}</span>{children}</div></header>;
+export function PageHeader({ eyebrow, title, children, name = school }: { eyebrow: string; title: string; children?: ReactNode; name?: string }) {
+  return <header className="page-header"><div><p className="eyebrow">{eyebrow}</p><h1>{title}</h1></div><div className="header-actions"><span className="school-name"><Icon name="school" size={18} /><span dir="auto">{name}</span></span>{children}</div></header>;
 }
 export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
   return <section className={`card ${className}`}>{children}</section>;
@@ -19,7 +19,15 @@ export function Badge({ children, tone = "green" }: { children: ReactNode; tone?
   return <span className={`badge ${tone}`}>{children}</span>;
 }
 export function ProgressBar({ value, label = "Course progress" }: { value: number; label?: string }) {
-  return <div className="progress-bar" role="progressbar" aria-label={label} aria-valuenow={Math.round(value)} aria-valuemin={0} aria-valuemax={100}><span style={{ width: `${value}%` }} /></div>;
+  const bounded = Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : 0;
+  return <div className="progress-bar" role="progressbar" aria-label={label} aria-valuenow={Math.round(bounded)} aria-valuemin={0} aria-valuemax={100}><span style={{ width: `${bounded}%` }} /></div>;
+}
+export function EmptyState({ icon = "book", title, description, children }: { icon?: IconName; title: string; description: string; children?: ReactNode }) {
+  return <div className="empty-content"><span className="empty-icon"><Icon name={icon} size={28} /></span><h3>{title}</h3><p className="muted">{description}</p>{children}</div>;
+}
+export function Pagination({ page, count, size, onPage }: { page: number; count: number; size: number; onPage: (page: number) => void }) {
+  const pages = Math.max(1, Math.ceil(count / size));
+  return count > size ? <nav className="pagination" aria-label="Pagination"><p>{page * size + 1}–{Math.min((page + 1) * size, count)} of {count.toLocaleString()} records</p><button className="button outline compact" disabled={page === 0} onClick={() => onPage(page - 1)}>Previous</button><button className="button outline compact" disabled={page >= pages - 1} onClick={() => onPage(page + 1)}>Next</button></nav> : null;
 }
 export function Stats({ values }: { values: [string, string | number][] }) {
   const iconFor = (label: string): IconName => /student/i.test(label) ? "students" : /fee/i.test(label) ? "fees" : /order/i.test(label) ? "shop" : /lesson/i.test(label) ? "book" : /quiz/i.test(label) ? "quiz" : "report";
