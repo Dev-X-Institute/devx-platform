@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Badge, Brand, Card, ClassSelect, EmptyState, Modal, PageHeader, Pagination, ProductArt, Stats } from "../components";
 import { csvCell, download, downloadReport, money, school, studentBalance, type Product, type ScreenProps } from "../demo";
 import { buildReport } from "../report";
-import { Crest } from "../crest.tsx";
+import { Crest } from "../SchoolCrest";
 import { FeeEditor, ProductEditor, feeNames } from "../SchoolEditors";
 import { useFormValidation } from "../forms";
 import { Icon } from "../icons";

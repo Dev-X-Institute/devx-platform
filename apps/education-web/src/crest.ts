@@ -1,4 +1,4 @@
-// School crest geometry, shared between the on-screen React component (crest.tsx)
+// School crest geometry, shared between the on-screen React component (SchoolCrest.tsx)
 // and the pdf-lib renderer (Task 3). This module is deliberately plain data with
 // no React, DOM or canvas dependency: every renderer walks `crestShapes` itself.
 //
