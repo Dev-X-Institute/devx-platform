@@ -2,10 +2,10 @@ import { useRef, useState } from "react";
 import type { QuizQuestion } from "@devx/ai";
 import type { Navigate } from "./App";
 import { dateKey, seedRecords, type SchoolRecords } from "./records";
+import { subjects } from "./report";
 
 export const school = "DevX Demo School";
 export const money = (amount: number) => `GH₵ ${amount.toLocaleString("en-GH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-export const subjects = ["Mathematics", "English Language", "Integrated Science", "Social Studies", "ICT"];
 export const questions: QuizQuestion[] = [
   { question: "What is a force?", options: ["A push or a pull", "The size of an object", "A type of energy", "The temperature of an object"], answerIndex: 0 },
   { question: "Which unit is used to measure force?", options: ["Joule (J)", "Newton (N)", "Watt (W)", "Metre (m)"], answerIndex: 1 },

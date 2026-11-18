@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Badge, Brand, Card, ClassSelect, EmptyState, Modal, PageHeader, Pagination, ProductArt, Stats } from "../components";
-import { csvCell, download, downloadReport, money, school, studentBalance, subjects, type Product, type ScreenProps } from "../demo";
+import { csvCell, download, downloadReport, money, school, studentBalance, type Product, type ScreenProps } from "../demo";
+import { buildReport, subjects } from "../report";
 import { FeeEditor, ProductEditor, feeNames } from "../SchoolEditors";
 import { useFormValidation } from "../forms";
 import { Icon } from "../icons";
@@ -57,7 +58,8 @@ export function Shop({ demo, notify }: ScreenProps) {
 }
 
 function ReportContent({ term = "Term 1", className = "JHS 2", name = school }: { term?: string; className?: string; name?: string }) {
-  return <div className="report-document"><div className="report-brand"><span className="crest"><Icon name="school" size={30} /></span><div><h2 dir="auto">{name}</h2><p className="muted">Sample terminal report, {term} · 2026</p></div></div><dl className="report-meta"><div><dt>Student</dt><dd>Student 2 (sample)</dd></div><div><dt>Class</dt><dd>{className}</dd></div><div><dt>Position</dt><dd>4 of 34</dd></div><div><dt>Attendance</dt><dd>58 of 60 days</dd></div></dl><div className="table-wrap"><table className="report-table"><caption className="sr-only">Terminal report subject scores</caption><thead><tr><th>Subject</th><th>Class score</th><th>Exam</th><th>Total</th><th>Grade</th><th>Remark</th></tr></thead><tbody>{subjects.map((subject, i) => <tr key={subject}><th scope="row">{subject}</th><td>{[27, 24, 26, 25, 28][i]}</td><td>{[58, 52, 55, 54, 60][i]}</td><td>{[85, 76, 81, 79, 88][i]}</td><td>{i === 1 || i === 3 ? "B2" : "A1"}</td><td className="muted">{i === 1 || i === 3 ? "Very good" : "Excellent"}</td></tr>)}</tbody></table></div><div className="two-columns report-remarks"><div><p className="muted">Class teacher’s remark</p><p>A strong term. Keep practising regularly.</p></div><div><p className="muted">Head’s remark</p><p>Well done. Keep up the good work.</p></div></div></div>;
+  const report = buildReport(term, className, name);
+  return <div className="report-document"><div className="report-brand"><span className="crest"><Icon name="school" size={30} /></span><div><h2 dir="auto">{report.schoolName}</h2><p className="muted">Sample terminal report, {report.term} · {report.year}</p></div></div><dl className="report-meta"><div><dt>Student</dt><dd>{report.student} (sample)</dd></div><div><dt>Class</dt><dd>{report.className}</dd></div><div><dt>Position</dt><dd>{report.position}</dd></div><div><dt>Attendance</dt><dd>{report.attendance}</dd></div></dl><div className="table-wrap"><table className="report-table"><caption className="sr-only">Terminal report subject scores</caption><thead><tr><th>Subject</th><th>Class score</th><th>Exam</th><th>Total</th><th>Grade</th><th>Remark</th></tr></thead><tbody>{report.rows.map(row => <tr key={row.subject}><th scope="row">{row.subject}</th><td>{row.classScore}</td><td>{row.exam}</td><td>{row.total}</td><td>{row.grade}</td><td className="muted">{row.remark}</td></tr>)}</tbody></table></div><div className="two-columns report-remarks"><div><p className="muted">Class teacher’s remark</p><p>{report.teacherRemark}</p></div><div><p className="muted">Head’s remark</p><p>{report.headRemark}</p></div></div></div>;
 }
 
 export function Reports({ demo, notify, navigate }: ScreenProps) {
