@@ -228,3 +228,24 @@ test("report download survives a school name outside the PDF font character set"
   const bytes = await readFile((await pdf.path())!);
   expect(bytes.subarray(0, 5).toString()).toBe("%PDF-");
 });
+
+test("delivery card handles long names and contacts without overflow", async ({ page }) => {
+  await page.goto("/#reports");
+  await page.evaluate(([key, saved]) => localStorage.setItem(key, saved), [storageKey, JSON.stringify({
+    schoolName: "DevX Demo School",
+    completed: [0, 1], fees: [1200, 100, 80, 120], products: [], orders: [], balance: 650, drafts: [],
+    students: [
+      { id: 1, name: "Student 1", className: "JHS 2", progress: 82, attendance: 97, contact: "parent1@school.example" },
+      { id: 2, name: "Aleksandra-Beatrice Nkrumah-Mensah", className: "JHS 2", progress: 50, attendance: 95, contact: "aleksandra.beatrice.nkrumah.mensah.parent@very-long-domain.school.example" },
+      { id: 3, name: "Student 3", className: "JHS 2", progress: 31, attendance: 84, contact: "parent3@school.example" },
+      { id: 4, name: "Student 4", className: "JHS 2", progress: 55, attendance: 92, contact: null },
+    ],
+  })] as const);
+  await page.reload();
+  await expect(page.getByText("3 of 4 parents have contact details")).toBeVisible();
+  const item = page.locator(".delivery-item").filter({ hasText: "Aleksandra" });
+  await expect(item.locator(".delivery-copy strong")).toHaveText("Aleksandra-Beatrice Nkrumah-Mensah");
+  await expect(item.locator(".delivery-contact")).toContainText("@very-long-domain.school.example");
+  await expect(page.locator(".delivery-item").filter({ hasText: "Student 4" }).locator(".delivery-missing")).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
