@@ -4,7 +4,7 @@
 
 **Goal:** Replace the plain-text report PDF with a styled, reproducible vector report card carrying the school crest as a watermark, and rebuild the "Delivery to parents" card so it reads well with long names and contact values.
 
-**Architecture:** One shared report data model (`src/report.ts`) feeds both the on-screen report and a new pdf-lib renderer (`src/pdf.ts`). A shared crest geometry module (`src/crest.ts`) is rendered by a React component (`src/crest.tsx`) on screen and by pdf-lib in the PDF. The delivery card becomes a two-line item list backed by the same student records.
+**Architecture:** One shared report data model (`src/report.ts`) feeds both the on-screen report and a new pdf-lib renderer (`src/pdf.ts`). A shared crest geometry module (`src/crest.ts`) is rendered by a React component (`src/SchoolCrest.tsx`) on screen and by pdf-lib in the PDF. The delivery card becomes a two-line item list backed by the same student records.
 
 **Tech Stack:** React 19 + TypeScript, Vite, pdf-lib (new), lucide-react (existing), Playwright (existing, `test:ui`).
 
@@ -86,8 +86,12 @@ const rows: ReportRow[] = [
 ].map((row, i) => ({ ...row, total: row.classScore + row.exam, grade: i === 1 || i === 3 ? "B2" : "A1", remark: i === 1 || i === 3 ? "Very good" : "Excellent" }));
 ```
 
-`subjects` must still be exported (as `subjects = rows.map(r => r.subject)` or a literal) because
-`ReportContent` and the PDF both iterate it. `initials(name)` must not index unchecked: split,
+> **Superseded during execution:** `subjects` is **not** exported. Both `ReportContent` and the PDF
+> iterate `rows` (the PDF reads `row.subject`), so the export was dead code and was removed in
+> `a9e7791`. See "Post-execution notes" at the end of this document.
+
+~~`subjects` must still be exported (as `subjects = rows.map(r => r.subject)` or a literal) because
+`ReportContent` and the PDF both iterate it.~~ `initials(name)` must not index unchecked: split,
 take the first three parts, and map each part's first character (guard the empty string). Fixed values: `student = "Student 2"`, `position = "4 of 34"`, `attendance = "58 of 60 days"`, `teacherRemark = "A strong term. Keep practising regularly."`, `headRemark = "Well done. Keep up the good work."`, `year = 2026`. `monogram = initials(schoolName)`; `generatedOn` defaults to `new Date().toISOString().slice(0, 10)`.
 
 - [ ] **Step 4: Rewire `ReportContent`** in `apps/education-web/src/screens/School.tsx`
@@ -118,7 +122,7 @@ git commit -m "refactor: share one report data model between screen and PDF"
 
 **Files:**
 - Create: `apps/education-web/src/crest.ts`
-- Create: `apps/education-web/src/crest.tsx`
+- Create: `apps/education-web/src/SchoolCrest.tsx`
 - Modify: `apps/education-web/src/screens/School.tsx` (the `.crest` span inside `ReportContent`)
 - Modify: `apps/education-web/src/index.css` (`.crest` rule at line 166)
 - Test: `apps/education-web/tests/screens.spec.ts`
@@ -151,7 +155,7 @@ Expected: FAIL — the `.crest` today holds the lucide `school` icon (`aria-hidd
 
 Palette: ring/ink `#0b7053`, field `#e2f1ea`, ribbon `#0b7053`, ribbon text `#ffffff`. Starting geometry (tune visually): ring `{ kind: "circle", cx: 48, cy: 46, r: 44, stroke: "#0b7053", strokeWidth: 4 }`; field `{ kind: "circle", cx: 48, cy: 46, r: 40, fill: "#e2f1ea" }`; monogram text `{ kind: "text", value: "", x: 48, y: 54, size: 24, fill: "#0b7053", bold: true, center: true }` (the `value` is replaced at render time by the `label`); ribbon `{ kind: "rect", x: 14, y: 66, width: 68, height: 18, rx: 9, fill: "#0b7053" }`; motto `{ kind: "text", value: "EST. 2026", x: 48, y: 78, size: 8, fill: "#ffffff", center: true }`.
 
-- [ ] **Step 4: Implement `apps/education-web/src/crest.tsx`**
+- [ ] **Step 4: Implement `apps/education-web/src/SchoolCrest.tsx`**
 
 Map `crestShapes` to `<circle>`/`<rect>`/`<text>`. For the monogram shape, use the `label` prop as its text and render it with `textAnchor="middle"` when `center` is true; render motto text the same way. Import `initials` only if needed for a default label; the component requires `label`.
 
@@ -165,7 +169,7 @@ Expected: PASS.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add apps/education-web/src/crest.ts apps/education-web/src/crest.tsx apps/education-web/src/screens/School.tsx apps/education-web/src/index.css apps/education-web/tests/screens.spec.ts
+git add apps/education-web/src/crest.ts apps/education-web/src/SchoolCrest.tsx apps/education-web/src/screens/School.tsx apps/education-web/src/index.css apps/education-web/tests/screens.spec.ts
 git commit -m "feat: add a shared school crest rendered on screen"
 ```
 
@@ -426,3 +430,31 @@ git push -u origin feature/report-card-pdf
 ```
 
 Open a PR against `main`, fill in the template, and in the description justify `pdf-lib` (vector PDF generation with an embedded vector crest watermark, pure JS, no native build; ~150 KB, dynamically imported so it does not affect first load).
+
+## Post-execution notes
+
+Recorded after the work shipped on `feature/report-card-pdf`. These are deviations from the plan text
+above; the code and the design doc are authoritative. Full rulings R1–R9 and the task/review log live in
+`.tmp/sdd/2026-11-18-report-card-pdf/progress.md` (git-ignored).
+
+1. **Crest component is `SchoolCrest.tsx`, not `crest.tsx`** (ruling R7). A lowercase `crest.tsx` collides
+   with `crest.ts` on a case-insensitive filesystem (Windows), so the component was named `SchoolCrest`
+   and `allowImportingTsExtensions` was never needed. Every `crest.tsx` reference above is superseded.
+2. **`subjects` is not exported** (see the superseded marker in Task 1, Step 3). `buildReport` builds
+   `rows`, and both renderers iterate `rows`; the export had no consumers and was removed in `a9e7791`.
+3. **The PDF watermark is upright, not diagonal** (ruling R9). The spec prose said "diagonally", but
+   per-shape rotation in pdf-lib would dismember the crest and a group transform stack was out of scope.
+   The watermark is a tiled upright crest; reversible if a diagonal watermark is wanted later.
+4. **The PDF is saved with `doc.save({ useObjectStreams: false })`** (ruling R8). pdf-lib's default object
+   streams compress the font name away, so the test that asserts `/BaseFont /Helvetica` would otherwise
+   fail. The assertion in `tests/screens.spec.ts` is intentionally coupled to this option and carries a
+   comment saying so.
+5. **Verification.** `npm run typecheck` and `npm run build` pass; `pdf-lib` is isolated in its own chunk
+   (`dist/assets/pdf-*.js`, ~424 kB) and dynamically imported. `screens.spec.ts` alone is deterministic
+   (62/62). A structural check of a real download confirmed one A4 page, embedded Helvetica, 16 vector
+   crests (128 bezier curves), and decodable report text.
+6. **Full suite.** `npm run test:ui -w education-web` passes cleanly (92 passed, 4 skipped, 0 failed) once
+   the dev server is started fresh. Earlier whole-suite timeouts (30 s on `page.goto`/`page.evaluate` in
+   unrelated tests) were caused by a stale long-lived dev server being reused (`reuseExistingServer: true`);
+   they were not a code or config problem. Kill any lingering `vite` process before running the whole suite.
+

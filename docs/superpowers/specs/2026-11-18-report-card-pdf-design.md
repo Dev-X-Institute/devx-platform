@@ -2,7 +2,7 @@
 
 - Date: 2026-11-18
 - Branch: `feature/report-card-pdf`
-- Status: awaiting approval
+- Status: approved — implemented on `feature/report-card-pdf` (PR pending second review)
 
 ## Intent / why
 
