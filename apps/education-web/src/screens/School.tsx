@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Badge, Brand, Card, ClassSelect, EmptyState, Modal, PageHeader, Pagination, ProductArt, Stats } from "../components";
 import { csvCell, download, downloadReport, money, school, studentBalance, type Product, type ScreenProps } from "../demo";
-import { buildReport, subjects } from "../report";
+import { buildReport } from "../report";
+import { Crest } from "../crest.tsx";
 import { FeeEditor, ProductEditor, feeNames } from "../SchoolEditors";
 import { useFormValidation } from "../forms";
 import { Icon } from "../icons";
@@ -59,7 +60,7 @@ export function Shop({ demo, notify }: ScreenProps) {
 
 function ReportContent({ term = "Term 1", className = "JHS 2", name = school }: { term?: string; className?: string; name?: string }) {
   const report = buildReport(term, className, name);
-  return <div className="report-document"><div className="report-brand"><span className="crest"><Icon name="school" size={30} /></span><div><h2 dir="auto">{report.schoolName}</h2><p className="muted">Sample terminal report, {report.term} · {report.year}</p></div></div><dl className="report-meta"><div><dt>Student</dt><dd>{report.student} (sample)</dd></div><div><dt>Class</dt><dd>{report.className}</dd></div><div><dt>Position</dt><dd>{report.position}</dd></div><div><dt>Attendance</dt><dd>{report.attendance}</dd></div></dl><div className="table-wrap"><table className="report-table"><caption className="sr-only">Terminal report subject scores</caption><thead><tr><th>Subject</th><th>Class score</th><th>Exam</th><th>Total</th><th>Grade</th><th>Remark</th></tr></thead><tbody>{report.rows.map(row => <tr key={row.subject}><th scope="row">{row.subject}</th><td>{row.classScore}</td><td>{row.exam}</td><td>{row.total}</td><td>{row.grade}</td><td className="muted">{row.remark}</td></tr>)}</tbody></table></div><div className="two-columns report-remarks"><div><p className="muted">Class teacher’s remark</p><p>{report.teacherRemark}</p></div><div><p className="muted">Head’s remark</p><p>{report.headRemark}</p></div></div></div>;
+  return <div className="report-document"><div className="report-brand"><span className="crest"><Crest label={report.monogram} size={56} /></span><div><h2 dir="auto">{report.schoolName}</h2><p className="muted">Sample terminal report, {report.term} · {report.year}</p></div></div><dl className="report-meta"><div><dt>Student</dt><dd>{report.student} (sample)</dd></div><div><dt>Class</dt><dd>{report.className}</dd></div><div><dt>Position</dt><dd>{report.position}</dd></div><div><dt>Attendance</dt><dd>{report.attendance}</dd></div></dl><div className="table-wrap"><table className="report-table"><caption className="sr-only">Terminal report subject scores</caption><thead><tr><th>Subject</th><th>Class score</th><th>Exam</th><th>Total</th><th>Grade</th><th>Remark</th></tr></thead><tbody>{report.rows.map(row => <tr key={row.subject}><th scope="row">{row.subject}</th><td>{row.classScore}</td><td>{row.exam}</td><td>{row.total}</td><td>{row.grade}</td><td className="muted">{row.remark}</td></tr>)}</tbody></table></div><div className="two-columns report-remarks"><div><p className="muted">Class teacher’s remark</p><p>{report.teacherRemark}</p></div><div><p className="muted">Head’s remark</p><p>{report.headRemark}</p></div></div></div>;
 }
 
 export function Reports({ demo, notify, navigate }: ScreenProps) {

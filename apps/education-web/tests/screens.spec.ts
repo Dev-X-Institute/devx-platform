@@ -193,6 +193,11 @@ test("report card renders model-driven subject rows", async ({ page }) => {
   await expect(page.locator(".report-document")).toContainText("DevX Demo School");
 });
 
+test("report header shows the school crest", async ({ page }) => {
+  await page.goto("/#reports");
+  await expect(page.locator('.report-document .crest svg[aria-label="School crest"]')).toBeVisible();
+});
+
 test("screen picker and mobile menu expose all reference screens", async ({ page }, info) => {
   await page.goto("/#student-home");
   if (info.project.name === "mobile") {
