@@ -1,6 +1,6 @@
 # Platform AI architecture
 
-**Status:** Proposed foundation; no production AI provider or edge function is implemented yet.
+**Status:** Education Edge Function scaffold is in place; provider selection and production integration remain pending.
 
 ## Goals
 
@@ -81,7 +81,17 @@ Use this pattern only when work exceeds a short request/response interaction or 
 - A small invocation adapter that accepts an already-created Supabase client and calls a function by name.
 - The current mock provider for local UI previews, clearly marked as mock-only.
 
-Apps should depend on this contract instead of importing provider SDKs or duplicating transport/error conventions. Keep prompts and education-specific data types out of the shared package unless a second app has the same semantics. Any new runtime dependency belongs in `packages/ai/package.json` and needs a documented reason.
+Apps should depend on this contract instead of importing provider SDKs or duplicating transport/error conventions. Keep prompts and education-specific data types out of the shared package unless a second app has the same semantics. Any dependency imported by `packages/ai` belongs in `packages/ai/package.json` and needs a documented reason.
+
+## Backend and AI tooling
+
+- **Supabase CLI and Deno test runner:** `@devx/backend-tools` owns pinned `supabase` and `deno` development dependencies. Run Supabase commands from the repository root with `npm run supabase --workspace @devx/backend-tools -- <command>`. Run the education function suite with `npm run test:education-ai --workspace @devx/backend-tools`. This keeps backend tooling out of browser app bundles.
+- **Frontend/backend client:** `@supabase/supabase-js` is already declared by `@devx/core`, which exposes `createBackend()`. Apps use that shared client rather than importing Supabase directly.
+- **Edge Function runtime:** Supabase Edge Functions run on Deno. Keep their imports and runtime configuration in each function's `deno.json` (or supported import map), as recommended by Supabase. Do not add server-only function dependencies to the browser-facing `@devx/ai` package.
+- **AI provider calls:** No provider has been approved yet. Start with the server-side provider interface and standard `fetch` if the approved provider exposes a suitable HTTP API. Add a provider SDK only after provider/privacy eligibility is settled, and declare it in the Edge Function's `deno.json` or the specific server-side package that imports it. Do not add a model SDK to the frontend or shared browser package.
+- **Runtime validation:** Define and validate request and response schemas at the function boundary. Add a schema library only if its runtime benefit justifies a dependency shared across functions; otherwise use small explicit validators for the narrow initial contract.
+
+The Supabase CLI is a development tool, so it belongs in the backend tooling workspace's `devDependencies`. Provider SDKs are runtime code and belong with the server function that imports them, not in the CLI/tooling package. The exact dependency rationale is recorded here so future provider choices can be reviewed before installation.
 
 ## Edge Function organization
 
@@ -122,7 +132,37 @@ The education app is the first consumer, not the owner of the shared AI transpor
 
 Prompts, education permissions, lesson-scoped grounding, teacher approval, student-facing copy, and education-specific evaluation examples belong to the education feature/function. The common request envelope, authentication pattern, provider adapter, output validation mechanics, rate limits, and operational metadata can be reused by other apps.
 
-The current `MockAiProvider` supports the quiz generator's local preview. It is not a production provider. The study helper and production Edge Function path are not implemented yet.
+The current `MockAiProvider` still supports the quiz generator's local preview. A server-side `education-ai` Edge Function scaffold now accepts `quiz.generate` and `lesson.explain`, verifies Supabase Auth, checks the trusted education role claim, applies input/output bounds, and requires an explicit provider approval flag before calling an OpenAI-compatible endpoint. The provider is still unselected and unconfigured, and the frontend is not wired to this function yet. There are no course/enrollment tables, so course-level authorization must be added before live use with real lessons or student records.
+
+## Other education features under consideration
+
+**Planning only:** the items below are proposals for discovery and product decisions. They are not implementation commitments. Several are ordinary backend workflows and should not use a language model just because they appear on an AI feature list.
+
+| Proposed feature | Recommended approach | Important boundary / review |
+| --- | --- | --- |
+| Generate student performance summaries | AI draft from a minimal, server-prepared set of assessment and progress facts | Show the time period and source facts; distinguish measured facts from generated wording. Teacher reviews before sharing or saving as an official record. |
+| Identify students whose performance is declining | Deterministic trend rules over validated scores/progress, with configurable time windows and thresholds | Return the evidence and rule that triggered the flag. Treat it as a review prompt, not a diagnosis or automated intervention. Teacher confirms next steps. |
+| Send automated school-fee reminders | Deterministic balance lookup, schedule, and approved message template | The backend computes the amount and recipient. Require correct guardian-to-student links, deduplication, delivery status, and an appropriate approval policy. Do not use an LLM to calculate balances or decide whom to contact. |
+| Generate draft report-card comments | AI draft grounded in teacher-selected evidence and an agreed rubric | Teacher edits and approves every comment. Do not infer traits, behavior, causes, or achievement that are absent from the supplied evidence. Preserve the evidence period and draft provenance. |
+| AI assistant for parents and school administrators | Authenticated retrieval assistant with separate parent and admin policies and allowlisted read tools | Parent access is limited to linked children; admin access follows school scope. Retrieve only permitted records. Require confirmation for writes or messages; never expose a general-purpose database or agent tool. |
+| Automate attendance notifications | Deterministic event-driven workflow triggered by attendance state changes | Verify guardian and contact preferences, deduplicate retries, record delivery outcomes, and define correction/escalation handling. The model must not decide attendance status or trigger messages. |
+
+### Shared foundation these features may reuse
+
+- Reuse the Supabase Auth boundary, app-owned Edge Function entry points, validated contracts, safe operational metadata, provider adapter, and provider approval gate described above.
+- Build sensitive insights from server-side queries that enforce school, role, and student relationships. Send a minimal prepared payload to a model only when the approved provider and data policy allow it; never let the model query the database directly.
+- Keep generated prose separate from source facts. Return structured output that can be displayed alongside its time range and evidence; require the appropriate human review before a result becomes an official record or is sent externally.
+- Use a queue/worker for scheduled or durable work. Store an idempotency key and task/message state so retries cannot create duplicate drafts, flags, or notifications. The queue is an execution tool; deterministic feature rules remain app-owned.
+- Keep parent and administrator assistants as separate permission profiles even if they share the same retrieval and model infrastructure. The caller's role and record scope come from trusted backend state, never from prompt text or a client-supplied role.
+
+### Suggested discovery order
+
+1. **Specify the deterministic workflows first:** define attendance state transitions and fee-reminder rules, recipients, timing, deduplication, opt-out/correction behavior, approvals, and audit requirements. These provide clear acceptance criteria without a model.
+2. **Specify declining-performance flags:** agree the exact metrics, comparison period, minimum data requirements, thresholds, missing-data behavior, and who may view/clear a flag. Validate that thresholds support review rather than high-impact automatic decisions.
+3. **Design teacher-facing AI drafts:** define the evidence schema, rubric, tone, input minimization, review/edit/save flow, and a non-identifying evaluation set for summaries and report-card comments. Confirm provider eligibility before using real student data.
+4. **Scope role-specific assistants last:** list parent and administrator tasks separately, identify each permitted data source and tool, then define refusal behavior and human confirmation for every write or external action. Start with read-only answers to bounded questions before considering agentic workflows.
+
+Before selecting any of these for a pilot, record a feature owner, authorized roles, data fields, output destination, review/approval gate, evaluation cases, failure behavior, and retention policy. No new model provider or runtime dependency is selected by this plan.
 
 ## Delivery sequence
 
