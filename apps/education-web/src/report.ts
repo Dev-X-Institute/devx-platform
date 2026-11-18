@@ -39,8 +39,6 @@ const rows: ReportRow[] = [
   remark: i === 1 || i === 3 ? "Very good" : "Excellent",
 }));
 
-export const subjects: string[] = rows.map(row => row.subject);
-
 export function initials(name: string): string {
   return name
     .trim()

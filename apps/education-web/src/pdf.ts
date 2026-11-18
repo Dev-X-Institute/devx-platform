@@ -22,7 +22,7 @@ const white = rgb(1, 1, 1);
 // outside the plain Latin-1 range. Anything else is replaced so drawText never
 // throws on a school or student name typed with an unsupported glyph.
 const WIN_ANSI_EXTRAS =
-  "\u2018\u2019\u201C\u201D\u2013\u2014\u2022\u2026\u20AC\u2122\u0152\u0153\u0160\u0161\u0178\u017D\u017E\u0192\u02C6\u02DC\u2030\u2039\u203A\u2020\u2021";
+  "\u2018\u2019\u201A\u201C\u201D\u201E\u2013\u2014\u2022\u2026\u20AC\u2122\u0152\u0153\u0160\u0161\u0178\u017D\u017E\u0192\u02C6\u02DC\u2030\u2039\u203A\u2020\u2021";
 const safeText = (text: string) => text.replace(/[^\u0020-\u007E\u00A0-\u00FF]/g, char => (WIN_ANSI_EXTRAS.includes(char) ? char : "?"));
 
 const hexColor = (hex: string) => {

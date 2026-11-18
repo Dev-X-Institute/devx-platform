@@ -179,7 +179,9 @@ test("report download is a PDF and fee export is a CSV", async ({ page }) => {
   const content = await readFile((await pdf.path())!);
   expect(content.subarray(0, 5).toString()).toBe("%PDF-");
   // The old hand-rolled generator embedded Courier only, so Helvetica is the real
-  // signal that a vector pdf-lib document was produced.
+  // signal that a vector pdf-lib document was produced. It relies on pdf.ts saving
+  // with `useObjectStreams: false`; enabling object streams would compress the font
+  // name away again, so fix pdf.ts rather than weakening this assertion.
   expect(content.includes("Helvetica")).toBe(true);
   await page.goto("/#fees");
   const csvEvent = page.waitForEvent("download");
