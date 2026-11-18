@@ -163,7 +163,7 @@ table td:last-child { text-align: right; }
 .report-card { padding: 28px; }
 .report-brand { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
 .report-brand h2 { font-size: 23px; }
-.crest { width: 56px; height: 56px; border-radius: 12px; background: var(--mint); color: var(--green); display: grid; place-items: center; font-size: 27px; font-weight: 700; flex-shrink: 0; }
+.crest { display: grid; place-items: center; flex-shrink: 0; width: 56px; height: 56px; }
 .report-meta { display: flex; flex-wrap: wrap; gap: 22px; margin: 0 0 19px; font-size: 15px; }
 .report-meta dt { color: var(--muted); }
 .report-meta dd { margin: 0; font-weight: 600; }
@@ -178,9 +178,17 @@ table td:last-child { text-align: right; }
 .report-remarks > div { padding: 12px; border: 1px solid var(--border); border-radius: 12px; font-size: 14px; }
 .report-download { margin-top: 12px; font-size: 14px; }
 .delivery-description { font-size: 15px; line-height: 1.3; margin: 9px 0; }
-.delivery-list .list-row { gap: 12px; font-size: 15px; }
-.delivery-list .list-row > .muted { margin-left: auto; font-size: 14px; }
-.delivery-list .badge { font-size: 13px; }
+.delivery-list { list-style: none; margin: 12px 0 0; padding: 0; }
+.delivery-item { display: flex; align-items: flex-start; gap: 12px; padding: 14px 0; border-top: 1px solid var(--border); }
+.delivery-item > .badge { flex-shrink: 0; margin-left: auto; font-size: 13px; }
+.delivery-avatar { flex-shrink: 0; width: 36px; height: 36px; border-radius: 50%; background: var(--mint); color: var(--green); display: grid; place-items: center; font-size: 13px; font-weight: 700; }
+.delivery-copy { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.delivery-copy strong { overflow-wrap: anywhere; }
+.delivery-contact, .delivery-missing { display: inline-flex; align-items: center; gap: 6px; min-width: 0; font-size: 14px; overflow-wrap: anywhere; }
+.delivery-contact { color: var(--muted); }
+.delivery-missing { color: var(--color-danger); }
+.delivery-coverage { margin: 12px 0 4px; }
+.delivery-coverage-head { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; margin-bottom: 6px; }
 .two-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .two-columns > label { margin-bottom: 16px; }
 .sign-in { min-height: 100svh; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
