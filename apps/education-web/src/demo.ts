@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import type { QuizQuestion } from "@devx/ai";
 import type { Navigate } from "./App";
 import { dateKey, seedRecords, type SchoolRecords } from "./records";
-import { subjects } from "./report";
+import { buildReport } from "./report";
 
 export const school = "DevX Demo School";
 export const money = (amount: number) => `GH₵ ${amount.toLocaleString("en-GH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -93,14 +93,15 @@ export function download(name: string, content: string, type = "text/csv;charset
   const link = document.createElement("a"); link.href = url; link.download = name; link.click();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
-// Text-only PDF for the sample report, without a PDF library dependency.
-export function downloadReport(term = "Term 1", className = "JHS 2") {
-  const lines = ["DevX Education - School report", `${term}, ${className}, 2026`, "Student: Student 2", "Position: 4 of 34 | Attendance: 58 of 60 days", "", "Subject                         Class  Exam  Total  Grade", ...subjects.map((s, i) => `${s.padEnd(32)}${[27, 24, 26, 25, 28][i]}     ${[58, 52, 55, 54, 60][i]}    ${[85, 76, 81, 79, 88][i]}     ${i === 1 || i === 3 ? "B2" : "A1"}`), "", "Average: 81.8%", "Teacher: A strong term. Keep practising regularly.", "Head: Well done. Keep up the good work.", "", "Frontend preview - sample data"];
-  const stream = `BT /F1 11 Tf 50 780 Td 18 TL ${lines.map((line, i) => `${i ? "T* " : ""}(${line.replace(/[\\()]/g, "\\$&")}) Tj`).join("\n")} ET`;
-  const objects = ["<< /Type /Catalog /Pages 2 0 R >>", "<< /Type /Pages /Kids [3 0 R] /Count 1 >>", "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>", "<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>", `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`];
-  let pdf = "%PDF-1.4\n"; const offsets = [0];
-  objects.forEach((obj, i) => { offsets.push(pdf.length); pdf += `${i + 1} 0 obj\n${obj}\nendobj\n`; });
-  const start = pdf.length;
-  pdf += `xref\n0 6\n0000000000 65535 f \n${offsets.slice(1).map(n => `${String(n).padStart(10, "0")} 00000 n \n`).join("")}trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${start}\n%%EOF`;
-  download("student-report.pdf", pdf, "application/pdf");
+export function downloadBytes(name: string, bytes: Uint8Array, type = "application/pdf") {
+  const url = URL.createObjectURL(new Blob([bytes.slice().buffer as ArrayBuffer], { type }));
+  const link = document.createElement("a"); link.href = url; link.download = name; link.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+// Styled vector report card. `pdf.ts` is imported on demand so pdf-lib (and its
+// ~420 kB chunk) stays off first load; `report.ts` is a static import because the
+// report screen already loads it, so a dynamic import would only add a warning.
+export async function downloadReport(term = "Term 1", className = "JHS 2", schoolName = school) {
+  const { renderReportPdf } = await import("./pdf");
+  downloadBytes("student-report.pdf", await renderReportPdf(buildReport(term, className, schoolName)));
 }

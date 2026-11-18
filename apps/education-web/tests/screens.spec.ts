@@ -177,7 +177,10 @@ test("report download is a PDF and fee export is a CSV", async ({ page }) => {
   const pdf = await pdfEvent;
   expect(pdf.suggestedFilename()).toBe("student-report.pdf");
   const content = await readFile((await pdf.path())!);
-  expect(content.subarray(0, 8).toString()).toBe("%PDF-1.4");
+  expect(content.subarray(0, 5).toString()).toBe("%PDF-");
+  // The old hand-rolled generator embedded Courier only, so Helvetica is the real
+  // signal that a vector pdf-lib document was produced.
+  expect(content.includes("Helvetica")).toBe(true);
   await page.goto("/#fees");
   const csvEvent = page.waitForEvent("download");
   await page.getByRole("button", { name: "Export", exact: true }).click();
@@ -206,4 +209,22 @@ test("screen picker and mobile menu expose all reference screens", async ({ page
   }
   await page.getByLabel("Explore screens").selectOption("reports");
   await expect(page.getByRole("heading", { name: "Report cards", exact: true })).toBeVisible();
+});
+
+// The app keeps sample data in memory until the first edit, so tests seed the
+// documented storage shape directly and reload to exercise the changed state.
+const storageKey = "devx-education-demo-v1";
+
+test("report download survives a school name outside the PDF font character set", async ({ page }) => {
+  await page.goto("/#reports");
+  await page.evaluate(([key, saved]) => localStorage.setItem(key, saved), [storageKey, JSON.stringify({
+    schoolName: "DevX GH₵ Academy",
+    completed: [0, 1], fees: [1200, 100, 80, 120], products: [], orders: [], balance: 650, drafts: [],
+  })] as const);
+  await page.reload();
+  const event = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download PDF", exact: true }).first().click();
+  const pdf = await event;
+  const bytes = await readFile((await pdf.path())!);
+  expect(bytes.subarray(0, 5).toString()).toBe("%PDF-");
 });
