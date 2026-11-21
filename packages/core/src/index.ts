@@ -4,7 +4,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 export type AppId = "education";
 
 /** Roles used by the education app. Other apps can define their own. */
-export type EducationRole = "student" | "teacher" | "admin";
+export type EducationRole = "student" | "teacher" | "admin" | "parent";
 
 export interface BackendConfig {
   url: string;

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { EducationRole } from "@devx/core";
+import type { EducationAuth } from "../auth";
 import type { Navigate } from "../App";
 import { Brand, Card, PageHeader, ProgressBar, ScreenPicker } from "../components";
 import { lessons, questions, school, type ScreenProps } from "../demo";
@@ -9,21 +10,22 @@ import { AnalyticsPanel } from "../AnalyticsPanel";
 import { LessonDiagram } from "../LessonDiagram";
 import { useFormValidation } from "../forms";
 
-export function SignIn({ navigate, onRole }: { navigate: Navigate; onRole: (role: EducationRole) => void }) {
+export function SignIn({ navigate, onRole, auth }: { navigate: Navigate; onRole: (role: EducationRole) => void; auth: EducationAuth }) {
   const [role, setRole] = useState<EducationRole>("student");
-  const validation = useFormValidation();
+  const [mode, setMode] = useState<"sign-in" | "sign-up">("sign-in");
   const enter = (selected: EducationRole) => { onRole(selected); navigate(selected === "student" ? "student-home" : selected === "teacher" ? "teacher" : "admin"); };
   return <div className="sign-in">
     <section className="sign-in-brand"><Brand /><div className="sign-in-message"><LearningArt /><h1>Learning that fits every classroom.</h1><p>Lessons, quizzes and progress in one place for students and teachers.</p></div><p className="sign-in-school"><Icon name="school" />{school}</p></section>
     <section className="sign-in-panel"><div className="sign-in-form"><h2>Welcome back</h2><p className="sign-in-subtitle muted">Sign in to continue.</p>
-      <div className="role-tabs" aria-label="Sign-in role">{(["student", "teacher", "admin"] as const).map(r => <button key={r} className={role === r ? "selected" : ""} aria-pressed={role === r} onClick={() => setRole(r)}><Icon name={r === "student" ? "book" : r === "teacher" ? "school" : "shield"} size={17} />{r === "admin" ? "Admin" : r.charAt(0).toUpperCase() + r.slice(1)}</button>)}</div>
-      <form noValidate onSubmit={e => { e.preventDefault(); if (validation.validate(e.currentTarget)) enter(role); }}>
-        <label>Email<input {...validation.props("email")} type="email" placeholder="you@school.edu.gh" autoComplete="username" autoCapitalize="none" required />{validation.error("email")}</label>
-        <label>Password<input {...validation.props("password")} type="password" placeholder="Your password" autoComplete="current-password" required />{validation.error("password")}</label>
-        <button className="button primary full" type="submit">Sign in as {role === "admin" ? "administrator" : role}</button>
+      {!auth.configured && <div className="role-tabs" aria-label="Preview role">{(["student", "teacher", "admin"] as const).map(r => <button type="button" key={r} className={role === r ? "selected" : ""} aria-pressed={role === r} onClick={() => setRole(r)}><Icon name={r === "student" ? "book" : r === "teacher" ? "school" : "shield"} size={17} />{r === "admin" ? "Admin" : r.charAt(0).toUpperCase() + r.slice(1)}</button>)}</div>}
+      {auth.configured && <div className="role-tabs" aria-label="Authentication mode"><button type="button" className={mode === "sign-in" ? "selected" : ""} aria-pressed={mode === "sign-in"} onClick={() => setMode("sign-in")}>Sign in</button><button type="button" className={mode === "sign-up" ? "selected" : ""} aria-pressed={mode === "sign-up"} onClick={() => setMode("sign-up")}>Create account</button></div>}
+      <form onSubmit={e => { e.preventDefault(); const form = new FormData(e.currentTarget); const email = String(form.get("email")).trim(); const password = String(form.get("password")); if (auth.configured) { void (mode === "sign-in" ? auth.signIn(email, password) : auth.signUp(email, password, String(form.get("display_name")).trim())); } else enter(role); }}>
+        {auth.configured && mode === "sign-up" && <label>Your name<input name="display_name" type="text" autoComplete="name" minLength={1} maxLength={120} required /></label>}
+        <label>Email<input name="email" type="email" placeholder="you@school.edu.gh" autoComplete="username" required /></label>
+        <label>Password<input name="password" type="password" placeholder="Your password" autoComplete={mode === "sign-in" ? "current-password" : "new-password"} minLength={8} required /></label>
+        <button className="button primary full" type="submit">{auth.configured ? (mode === "sign-in" ? "Sign in" : "Create account") : `Preview as ${role === "admin" ? "administrator" : role}`}</button>
       </form>
-      <p className="join-note muted">Choose your role to explore your workspace.</p>
-      <div className="preview-entry"><p className="demo-label">Frontend preview · use any email and password</p><ScreenPicker value="sign-in" navigate={navigate} /></div>
+      {auth.configured ? <><p className="join-note muted">Your school assigns your role after your account is created. Creating an account does not grant access to school records.</p>{auth.error && <p className="join-note" role="status">{auth.error}</p>}</> : <><p className="join-note muted">Choose a role to explore the sample workspace.</p><div className="preview-entry"><p className="demo-label">Frontend preview · no account is created</p><ScreenPicker value="sign-in" navigate={navigate} /></div></>}
     </div></section>
   </div>;
 }

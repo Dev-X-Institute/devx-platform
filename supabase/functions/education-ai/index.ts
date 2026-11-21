@@ -148,6 +148,26 @@ async function callModel(
   request: AiRequest,
   requestId: string,
 ): Promise<Response> {
+  // Deterministic local provider for exercising the complete authenticated
+  // function flow without sending lesson content to an external service.
+  if (Deno.env.get("AI_PROVIDER") === "mock") {
+    if (request.feature === "quiz.generate") {
+      const questions = Array.from({ length: request.count! }, (_, index) => ({
+        question: `Mock question ${index + 1} based on the lesson`,
+        options: ["Option A", "Option B", "Option C", "Option D"],
+        answerIndex: index % 4,
+      }));
+      return jsonResponse(200, {
+        ok: true,
+        requestId,
+        data: { questions, reviewRequired: true },
+      });
+    }
+
+    const answer = `Mock explanation for: ${request.question}`;
+    return jsonResponse(200, { ok: true, requestId, data: { answer } });
+  }
+
   if (Deno.env.get("AI_PROVIDER_APPROVED") !== "true") {
     return failure("AI_PROVIDER_NOT_APPROVED", 503, false, requestId);
   }
