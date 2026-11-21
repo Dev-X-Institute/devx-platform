@@ -38,6 +38,7 @@ export default function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [toast, setToast] = useState<{ message: string; undo?: () => boolean } | null>(null);
   const [toastPaused, setToastPaused] = useState(false);
+  const auth = useEducationAuth();
   const notify = (message: string, undo?: () => boolean) => setToast({ message, undo });
   const demo = useDemoData();
   const main = useRef<HTMLElement>(null);
