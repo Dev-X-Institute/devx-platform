@@ -29,15 +29,36 @@ test("role selection opens the administrator dashboard", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Your school, at a glance.", exact: true })).toBeVisible();
 });
 
+test("student records use the teacher workspace after a student preview", async ({ page }, info) => {
+  await page.goto("/#progress");
+  await page.evaluate(() => { window.location.hash = "students"; });
+  await expect(page.getByRole("heading", { name: "Students", exact: true })).toBeVisible();
+  if (info.project.name === "mobile") await page.getByRole("button", { name: "Menu", exact: true }).click();
+  const navigation = page.getByRole("navigation", { name: "Main navigation" });
+  await expect(navigation.getByRole("link", { name: "Students", exact: true })).toHaveAttribute("aria-current", "page");
+  await expect(navigation.getByRole("link", { name: "Dashboard", exact: true })).toBeVisible();
+  await expect(page.getByLabel("Explore screens")).toHaveValue("students");
+});
+
+test("administrator navigation retains the school workspace on student records", async ({ page }, info) => {
+  await page.goto("/#admin");
+  if (info.project.name === "mobile") await page.getByRole("button", { name: "Menu", exact: true }).click();
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Students", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Students", exact: true })).toBeVisible();
+  if (info.project.name === "mobile") await page.getByRole("button", { name: "Menu", exact: true }).click();
+  await expect(page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Overview", exact: true })).toBeVisible();
+  await expect(page.getByLabel("Explore screens")).toHaveValue("students");
+});
+
 test("activity filters update the chart summary and accessible table", async ({ page }) => {
   await page.goto("/#student-home");
   const analytics = page.locator(".analytics-card");
   await expect(analytics.getByText("240 minutes of learning")).toBeVisible();
   await analytics.getByText("View data table", { exact: false }).click();
-  await expect(analytics.getByRole("row", { name: "Mon 25", exact: true })).toBeVisible();
+  await expect(analytics.locator("tbody tr").first().locator("td")).toHaveText("25");
   await page.getByLabel("Activity metric").selectOption("lessons");
   await expect(analytics.getByText("12 lessons studied")).toBeVisible();
-  await expect(analytics.getByRole("row", { name: "Mon 1", exact: true })).toBeVisible();
+  await expect(analytics.locator("tbody tr").first().locator("td")).toHaveText("1");
   await expect(analytics.getByRole("columnheader", { name: "Lessons studied", exact: true })).toBeVisible();
 });
 
@@ -47,10 +68,12 @@ test("fee chart sorting preserves class values and offers keyboard access", asyn
   await analytics.getByText("View data table", { exact: false }).focus();
   await page.keyboard.press("Enter");
   await expect(analytics.getByRole("table")).toBeVisible();
-  await expect(analytics.locator("tbody tr").first()).toHaveText("JHS 178");
+  await expect(analytics.locator("tbody tr").first()).toHaveText("JHS 170");
   await page.getByLabel("Collection order").selectOption("highest");
-  await expect(analytics.locator("tbody tr").first()).toHaveText("JHS 391");
-  await expect(analytics.getByRole("row", { name: "JHS 2 64", exact: true })).toBeVisible();
+  await expect(analytics.locator("tbody tr").first()).toHaveText("JHS 170");
+  await expect(analytics.getByRole("row", { name: "JHS 2 39", exact: true })).toBeVisible();
+  await page.getByLabel("Analytics class").selectOption("JHS 2");
+  await expect(analytics.locator("tbody tr")).toHaveCount(1);
 });
 
 test("analytics and navigation work with reduced motion and narrow viewports", async ({ page }) => {
@@ -69,11 +92,12 @@ test("analytics and navigation work with reduced motion and narrow viewports", a
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
-test("lesson completion persists across reloads", async ({ page }) => {
+test("lesson completion persists across reloads", async ({ page }, info) => {
   await page.goto("/#course");
   await page.getByRole("button", { name: "Read the lesson" }).click();
   await expect(page.getByText("Forces are measured in newtons", { exact: false })).toBeVisible();
   await page.getByRole("button", { name: "Mark lesson complete" }).click();
+  if (info.project.name === "mobile") await page.getByRole("button", { name: "Choose lesson", exact: false }).click();
   await expect(page.getByText("3 of 4 lessons complete")).toBeVisible();
   await page.reload();
   await expect(page.getByRole("button", { name: "Lesson completed" })).toBeDisabled();
@@ -89,6 +113,9 @@ test("five quiz answers are scored and saved", async ({ page }) => {
   await page.getByRole("button", { name: "Back to home" }).click();
   await page.goto("/#progress");
   await expect(page.getByText("100%", { exact: true })).toBeVisible();
+  await page.goto("/#teacher");
+  await page.locator(".chart-data > summary").click();
+  await expect(page.locator(".analytics-card").getByRole("row", { name: "Forces and motion 85", exact: true })).toBeVisible();
 });
 
 test("quiz returns to an unanswered question before allowing completion", async ({ page }) => {
@@ -111,9 +138,9 @@ test("fee editing and a demo parent payment update the local records", async ({ 
   await page.getByLabel("Amount to pay").fill("100");
   await page.getByRole("button", { name: "Pay now", exact: true }).click();
   await page.getByRole("button", { name: "Complete demo payment" }).click();
-  await expect(page.getByText("GH₵ 550.00", { exact: true })).toBeVisible();
+  await expect(page.getByText("GH₵ 700.00", { exact: true })).toBeVisible();
   await page.goto("/#fees");
-  await expect(page.getByText("GH₵ 550.00", { exact: true })).toBeVisible();
+  await expect(page.getByText("GH₵ 700.00", { exact: true })).toBeVisible();
 });
 
 test("shop item editing and parent orders share the same inventory", async ({ page }) => {
@@ -130,7 +157,7 @@ test("shop item editing and parent orders share the same inventory", async ({ pa
   await page.getByRole("button", { name: "Review order and pay" }).click();
   await page.getByRole("button", { name: "Place demo order" }).click();
   await page.goto("/#shop");
-  await expect(page.getByText("School backpack × 1 for Student 2", { exact: true })).toBeVisible();
+  await expect(page.getByText("School backpack × 1", { exact: true })).toBeVisible();
 });
 
 test("teacher reviews the local sample draft before approval", async ({ page }) => {

@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { EducationRole } from "@devx/core";
 import { useEducationAuth } from "./auth";
 import { SignIn, StudentHome, Course, Quiz, Progress } from "./screens/Learning";
 import { TeacherDashboard, TeacherQuizzes, Students } from "./screens/Teaching";
 import { AdminDashboard, Fees, Shop, Reports, ParentView } from "./screens/School";
-import { Brand, ScreenPicker } from "./components";
+import { Brand, EmptyState, ScreenPicker } from "./components";
 import { useDemoData } from "./demo";
 import { Icon, type IconName } from "./icons";
 
@@ -30,6 +30,7 @@ const allowedFor = (role: EducationRole): Screen[] => role === "admin"
     : role === "parent" ? ["parent"]
       : ["student-home", "course", "quiz", "progress"];
 const navIcons: Partial<Record<Screen, IconName>> = { admin: "dashboard", teacher: "dashboard", "student-home": "home", course: "book", progress: "chart", "teacher-quizzes": "quiz", students: "students", fees: "fees", shop: "shop", reports: "report" };
+const PreviewTools = import.meta.env.DEV ? lazy(() => import("./PreviewTools")) : null;
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>(getScreen);
@@ -39,6 +40,8 @@ export default function App() {
   const auth = useEducationAuth();
   const demo = useDemoData();
   const main = useRef<HTMLElement>(null);
+  const menuButton = useRef<HTMLButtonElement>(null);
+  const sidebar = useRef<HTMLElement>(null);
   const navigate: Navigate = (next) => {
     if (auth.configured && auth.activeMembership && !allowedFor(auth.activeMembership.role).includes(next)) return;
     if (["admin", "teacher", "student-home", "fees", "shop", "reports", "parent", "teacher-quizzes"].includes(next)) setRole(roleFor(next));
@@ -49,7 +52,8 @@ export default function App() {
     const update = () => {
       const next = getScreen();
       setScreen(next);
-      if (["admin", "teacher", "student-home", "fees", "shop", "reports", "parent", "teacher-quizzes"].includes(next)) setRole(roleFor(next));
+      if (["admin", "teacher", "student-home", "progress", "fees", "shop", "reports", "parent", "teacher-quizzes"].includes(next)) setRole(roleFor(next));
+      else if (next === "students") setRole(current => current === "admin" ? "admin" : "teacher");
       setMenuOpen(false);
     };
     window.addEventListener("hashchange", update);
@@ -61,17 +65,23 @@ export default function App() {
     main.current?.focus();
   }, [screen]);
   useEffect(() => {
-    if (!toast) return;
-    const timer = window.setTimeout(() => setToast(""), 5000);
+    if (!toast || toastPaused) return;
+    const timer = window.setTimeout(() => setToast(null), 10000);
     return () => window.clearTimeout(timer);
-  }, [toast]);
+  }, [toast, toastPaused]);
   useEffect(() => {
     if (!menuOpen) return;
-    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setMenuOpen(false); };
+    const previousOverflow = document.body.style.overflow; document.body.style.overflow = "hidden";
+    sidebar.current?.querySelector<HTMLAnchorElement>("nav a")?.focus();
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { setMenuOpen(false); requestAnimationFrame(() => menuButton.current?.focus()); }
+      if (event.key === "Tab") { const elements = Array.from(sidebar.current?.querySelectorAll<HTMLElement>("a,button,select,summary") ?? []).filter(item => item.getClientRects().length > 0); const first = elements[0], last = elements.at(-1); if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); } else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); } }
+    };
     window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
+    return () => { window.removeEventListener("keydown", closeOnEscape); document.body.style.overflow = previousOverflow; };
   }, [menuOpen]);
-  const props = { navigate, demo, notify: setToast };
+  useEffect(() => { const query = window.matchMedia("(min-width: 701px)"); const close = () => { if (query.matches) setMenuOpen(false); }; query.addEventListener("change", close); return () => query.removeEventListener("change", close); }, []);
+  const props = { navigate, demo, notify };
   let content;
   switch (screen) {
     case "sign-in": content = <SignIn navigate={navigate} onRole={setRole} auth={auth} />; break;
@@ -100,8 +110,8 @@ export default function App() {
   return <>
     <a className="skip-link" href="#main-content" onClick={e => { e.preventDefault(); main.current?.focus(); main.current?.scrollIntoView(); }}>Skip to content</a>
     {!standalone && <>
-      <header className="mobile-header"><Brand /><button className="button outline" aria-expanded={menuOpen} aria-controls="sidebar" onClick={() => setMenuOpen(!menuOpen)}><Icon name={menuOpen ? "close" : "menu"} />{menuOpen ? "Close" : "Menu"}</button></header>
-      <aside id="sidebar" className={`sidebar ${menuOpen ? "open" : ""}`}>
+      <header className="mobile-header" inert={menuOpen}><Brand /><button ref={menuButton} className="button outline" aria-expanded={menuOpen} aria-controls="sidebar" onClick={() => setMenuOpen(!menuOpen)}><Icon name={menuOpen ? "close" : "menu"} />{menuOpen ? "Close" : "Menu"}</button></header>
+      <aside ref={sidebar} id="sidebar" className={`sidebar ${menuOpen ? "open" : ""}`} role={menuOpen ? "dialog" : undefined} aria-modal={menuOpen ? true : undefined} aria-label={menuOpen ? "Navigation menu" : undefined}>
         <Brand />
         <div className="workspace-context"><span className="workspace-icon"><Icon name="school" size={22} /></span><div>{auth.configured && auth.activeMembership ? <><strong>{auth.activeMembership.school_name}</strong><span>{auth.activeMembership.role}</span></> : <><strong>School workspace</strong><span>Term 1, 2026</span></>}</div></div>
         {auth.configured && auth.memberships.length > 1 && <label className="screen-picker">School<select aria-label="Active school" value={auth.activeMembership?.id ?? ""} onChange={e => auth.selectMembership(e.target.value)}>{auth.memberships.map(item => <option key={item.id} value={item.id}>{item.school_name}</option>)}</select></label>}
@@ -110,7 +120,12 @@ export default function App() {
         <div className="sidebar-footer"><div className="profile-context"><span className="profile-avatar"><Icon name={role === "student" ? "book" : role === "teacher" ? "school" : "shield"} /></span><div><strong>{role === "admin" ? "Administrator" : role === "teacher" ? "Class teacher" : "Student"}</strong><span>{role === "student" ? "JHS 2" : "School workspace"}</span></div></div><span className="demo-label">Frontend preview</span><ScreenPicker value={screen} navigate={(next) => { setRole(roleFor(next)); navigate(next); }} /></div>
       </aside>
     </>}
-    <main ref={main} id="main-content" tabIndex={-1} className={standalone ? "standalone" : "main-content"}>{content}</main>
-    {toast && <div className="toast" role="status"><Icon name="check" />{toast}<button aria-label="Dismiss notification" onClick={() => setToast("")}><Icon name="close" size={18} /></button></div>}
+    <main ref={main} id="main-content" tabIndex={-1} inert={menuOpen} className={standalone ? "standalone" : "main-content"}>
+      {demo.storageError && <div className="storage-error" role="alert">Changes are available in this session, but browser storage could not save them.<button className="text-button" onClick={demo.retryStorage}>Retry saving</button></div>}
+      {demo.status === "loading" ? <section className="record-state" aria-busy="true"><h1>Loading school records</h1><p className="muted" role="status">Preparing your workspace…</p><div className="loading-skeleton" /></section> : demo.status === "error" ? <section className="record-state"><h1>School records could not load</h1><EmptyState icon="report" title="Try loading your records again" description="Your saved preview records are still available."><button className="button primary" onClick={() => demo.setStatus("ready")}>Retry loading</button></EmptyState></section> : content}
+    </main>
+    {!standalone && !menuOpen && <nav className="bottom-nav" aria-label="Mobile navigation">{links.map(([label, target]) => <a key={target} href={`#${target}`} aria-current={screen === target ? "page" : undefined}><Icon name={navIcons[target] ?? "dashboard"} size={20} /><span>{label}</span></a>)}</nav>}
+    {PreviewTools && <div className={`preview-tools-host ${standalone ? "standalone-tools" : ""}`} inert={menuOpen}><Suspense fallback={null}><PreviewTools demo={demo} /></Suspense></div>}
+    {toast && <div className="toast" role="status" onMouseEnter={() => setToastPaused(true)} onMouseLeave={() => setToastPaused(false)} onFocus={() => setToastPaused(true)} onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget)) setToastPaused(false); }}><Icon name="check" /><span>{toast.message}</span>{toast.undo && <button className="toast-undo" aria-label="Undo last change" onClick={() => { const restored = toast.undo!(); notify(restored ? "Change undone." : "Records changed again. Edit the record to make another change."); }}>Undo</button>}<button aria-label="Dismiss notification" onClick={() => setToast(null)}><Icon name="close" size={18} /></button></div>}
   </>;
 }

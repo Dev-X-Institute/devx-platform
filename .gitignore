@@ -53,6 +53,9 @@ student-payments.csv
 student-report.pdf
 fee-reminder-draft.txt
 report-delivery-draft.csv
+activity-analytics.csv
+fees-analytics.csv
+performance-analytics.csv
 
 # Operating system and editor leftovers
 .DS_Store
