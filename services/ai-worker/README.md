@@ -19,9 +19,10 @@ Supabase credential, network call, or student record is needed for the demo.
 The demo payload includes synthetic lesson text to make the example runnable.
 Production queue messages should contain only a task ID and minimal routing
 metadata. A worker repository should load the trusted task record and its
-authorized source references. The `ai_tasks` lifecycle table exists, but the
-queue consumer, Supabase adapter, task persistence integration, retries,
-cancellation, and deployment packaging are not implemented yet.
+authorized source references. The `ai_tasks` lifecycle table and durable queue
+are provisioned by migrations, but the queue consumer, Supabase adapter, task
+persistence integration, retries, cancellation, and deployment packaging are
+not implemented yet.
 
 LlamaIndex Workflow state is currently in memory for one execution. The
 Supabase queue and task record are intended to provide durable task delivery
@@ -74,20 +75,23 @@ generated assessment content before it is published. See
 ## Supabase connection design
 
 The queue and task adapters are the next integration step; this scaffold does
-not connect to Supabase yet. Keep the same worker code and vary only its
-server-side environment and network access:
+not connect to Supabase yet. The migrations provision the `pgmq` extension and
+a durable `ai_tasks` queue. Keep that queue private to server-side database
+access; `pgmq_public` wrappers and Data API exposure are not enabled. Keep the
+same worker code and vary only its server-side environment and network access:
 
 ### Local Supabase
 
 1. Start the stack from the repository root with `supabase start`; get the API
    URL and local keys with `supabase status`.
-2. Apply the migration that creates the protected `ai_tasks` table, then add a
-   durable `pgmq` queue. Queue messages should contain `{ "task_id": "..." }`
-   only.
-3. For a PostgREST queue adapter, create the `pgmq_public` wrappers and expose
-   `pgmq_public` in `supabase/config.toml`, then restart the local stack. Keep
-   queue RPC permissions server-only. Alternatively, a direct Postgres adapter
-   can use a dedicated worker database role.
+2. Apply the migrations for the protected `ai_tasks` table and durable
+   `ai_tasks` queue. Queue messages should contain only
+   `{ "task_id": "<uuid>" }`.
+3. Connect the worker through a server-side Postgres adapter using a dedicated
+   least-privilege worker database role. If a future adapter uses PostgREST,
+   create narrowly permissioned `pgmq_public` wrappers and expose that schema
+   in `supabase/config.toml`; never grant queue access to `anon` or
+   `authenticated` browser clients.
 4. Set worker-only credentials in an ignored local env file. Never put the
    service-role key in `VITE_*`, frontend config, or the Edge Function response.
 5. Run the worker on the host or as a sibling container; use the host-reachable
@@ -96,8 +100,8 @@ server-side environment and network access:
 
 ### Supabase platform
 
-1. Apply the `ai_tasks` migration and enable Supabase Queues/`pgmq`; create the
-   durable queue through migrations or the project dashboard.
+1. Apply the migrations to provision the `ai_tasks` lifecycle table and
+   durable `pgmq` queue. The queue is not exposed through the Data API.
 2. Deploy the app-specific Edge Function. It writes the task row and enqueues
    only the task ID; clients cannot publish directly to the worker queue.
 3. Deploy this worker as a separate container or persistent worker service with
@@ -109,9 +113,13 @@ server-side environment and network access:
 4. Configure health checks, concurrency, graceful shutdown, visibility timeout,
    retry/dead-letter handling, and independent scaling for that worker service.
 
-Supabase Queues is pull-based, so a separate consumer process is required. If
-using the PostgREST API, Supabase documents `pgmq_public.read`, `delete`, and
-`archive`; local CLI deployments must also expose the `pgmq_public` schema.
+Supabase Queues is pull-based, so a separate consumer process is required.
+The consumer should read with a visibility timeout, atomically claim the task
+row before processing, and recheck authorization and task status. On success,
+persist the result and terminal task state before archiving the queue message.
+On retryable failure, persist a safe failure code and let the message become
+visible again after the visibility timeout; after the task's bounded retry
+limit, mark it failed and archive it. Duplicate deliveries must be harmless.
 Queue messages are delivery signals, while the protected task row is the
 durable source of truth. See the Supabase [Queues API](https://supabase.com/docs/guides/queues/api),
 [local/self-hosted setup](https://supabase.com/docs/guides/queues/expose-self-hosted-queues),

@@ -1,6 +1,6 @@
 # Platform AI architecture
 
-**Status:** A Python/LlamaIndex worker scaffold with a mock provider and the shared `ai_tasks` lifecycle table are in place. Supabase Queue consumption, app enqueue functions, a production AI provider, and worker deployment remain pending.
+**Status:** A Python/LlamaIndex worker scaffold with a mock provider, the shared `ai_tasks` lifecycle table, and a durable Supabase `ai_tasks` queue are in place. Queue consumption, app enqueue functions, a production AI provider, and worker deployment remain pending.
 
 ## Goals
 
@@ -68,7 +68,7 @@ Recommended lifecycle:
 4. The frontend reads task status through an authenticated, owner-scoped/RLS-protected endpoint or subscription. Realtime is an optional notification path, not an authorization mechanism; clients must still be permitted to read the task. Polling can be the initial fallback.
 5. Retry only transient failures, with bounded backoff and idempotent task effects. After the retry limit, move the task to a dead-letter/review state and expose a safe failure message. Support cancellation and stale-task cleanup.
 
-Supabase Queues is pull-based, so the Python worker runs as a separate process/container and claims work from `pgmq`; the Edge Function only accepts, authorizes, records, and enqueues. Keep the queue message small and avoid copying sensitive user data into it; use the task ID to fetch protected task data. The worker uses server-side credentials with the minimum access needed and never exposes service-role or provider secrets to the app. App-specific function entry points remain the only public initiation boundary; do not expose a generic client-callable agent runner. The initial scaffold and local/hosted setup notes are in [`services/ai-worker/`](../services/ai-worker/README.md).
+Supabase Queues is pull-based, so the Python worker runs as a separate process/container and claims work from `pgmq`; the Edge Function only accepts, authorizes, records, and enqueues. The durable `ai_tasks` queue is provisioned by `20261122130000_ai_tasks_queue.sql`, but no producer or consumer is connected yet. Keep each message to `{ "task_id": "<uuid>" }`; the task row is the source of truth. Do not expose queue operations through the Data API or to browser clients. The worker uses server-side credentials with the minimum access needed and never exposes service-role or provider secrets to the app. App-specific function entry points remain the only public initiation boundary; do not expose a generic client-callable agent runner. The initial scaffold and local/hosted setup notes are in [`services/ai-worker/`](../services/ai-worker/README.md).
 
 Use this pattern only when work exceeds a short request/response interaction or needs durable retries, progress, external tools, or multiple coordinated model steps. A quiz draft or lesson explanation that fits within the synchronous limits should stay on the direct Edge Function path.
 
@@ -172,7 +172,7 @@ Before selecting any of these for a pilot, record a feature owner, authorized ro
 4. Implement one narrow education function and feature end to end (quiz drafts), including authentication, authorization, validation, limits, safe usage logging, and teacher review.
 5. Evaluate against a curated, non-identifying set of examples; record quality, malformed-output, latency, and cost results. Add the study helper only after its grounding and privacy behavior are acceptable.
 6. Add feedback/usage views and operational budget controls before pilot rollout; repeat provider and privacy review before real student use.
-7. Extend the Python/LlamaIndex scaffold with a Supabase queue consumer and protected task repository; add an education-specific enqueue path with task state access, retries, cancellation, tool allowlists, and human approval before enabling agent actions. The shared lifecycle schema is in place, but it does not yet publish queue messages or persist worker transitions.
+7. Extend the Python/LlamaIndex scaffold with a Supabase queue consumer and protected task repository; add an education-specific enqueue path with task state access, retries, cancellation, tool allowlists, and human approval before enabling agent actions. The lifecycle table and durable queue are provisioned, but no producer/consumer currently publishes messages or persists worker transitions.
 
 ## Decisions to settle before production
 

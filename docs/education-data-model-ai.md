@@ -1,6 +1,6 @@
 # Education data model and AI interaction plan
 
-**Status:** The education foundation and shared `ai_tasks` lifecycle table are implemented. Feature result tables, queue integration, and app-specific task enqueue flows remain planned.
+**Status:** The education foundation and shared `ai_tasks` lifecycle table are implemented. The durable Supabase `ai_tasks` queue is provisioned by `20261122130000_ai_tasks_queue.sql`; feature result tables, queue adapters, and app-specific task enqueue flows remain planned.
 
 This plan describes the education data that should exist before AI features use real school records, and how the `education-ai` Edge Function should read and write that data. The initial schema is in migrations; later feature tables still require decisions about tenancy, role, retention, and product behavior.
 
@@ -107,4 +107,4 @@ Use the same education data foundation differently by feature:
 6. What are the retention and correction rules for attempts, attendance, fees, AI metadata, and delivery records?
 7. Which operations run synchronously, and which require a queue/worker, cancellation, retries, or review state?
 
-Resolve these in feature-specific decisions before adding result tables or connecting real student data to a model provider. The current task table is only lifecycle metadata: there is no queue, worker database adapter, or Edge Function enqueue flow yet.
+Resolve these in feature-specific decisions before adding result tables or connecting real student data to a model provider. Queue messages should contain only a `task_id`; the `ai_tasks` row remains the lifecycle source of truth. The queue is not exposed through the Data API, and no worker database adapter or Edge Function enqueue flow is implemented yet.
