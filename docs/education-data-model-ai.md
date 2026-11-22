@@ -6,7 +6,7 @@ This plan describes the education data that should exist before AI features use 
 
 ## Current function boundary
 
-[`supabase/functions/education-ai/index.ts`](../supabase/functions/education-ai/index.ts) currently accepts caller-supplied `lessonText`, authenticates the Supabase user, reads a global `education_role` from trusted `app_metadata`, validates the request, and calls a configured OpenAI-compatible endpoint. `quiz.generate` is limited to teacher/admin roles and returns a review-required draft; `lesson.explain` returns an answer. The function does not read or write education tables, establish course membership, persist drafts, or record AI task/usage rows.
+[`supabase/functions/education-ai/index.ts`](../supabase/functions/education-ai/index.ts) currently accepts caller-supplied `lessonText`, authenticates the Supabase user, reads active roles from that user's `school_memberships` rows under RLS, validates the request, and calls a configured OpenAI-compatible endpoint. `quiz.generate` is allowed when the user has a teacher/admin membership and returns a review-required draft; `lesson.explain` is allowed for student/teacher/admin memberships. The function does not scope the request to a particular school or course, persist drafts, or record AI task/usage rows.
 
 This is adequate for a scaffold using synthetic content. Before it handles real lessons or student records, the function should accept record identifiers and bounded feature parameters, then load content server-side after checking the caller's school and record access. A global role claim alone cannot represent a user who has different roles in different schools.
 

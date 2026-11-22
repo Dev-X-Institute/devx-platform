@@ -20,7 +20,7 @@ const MAX_ANSWER_CHARS = 4_000;
 const REQUEST_TIMEOUT_MS = 30_000;
 
 type Feature = "quiz.generate" | "lesson.explain";
-type EducationRole = "student" | "teacher" | "admin";
+type EducationRole = "student" | "teacher" | "admin" | "parent";
 
 interface QuizQuestion {
   question: string;
@@ -305,21 +305,14 @@ export async function handleRequest(request: Request): Promise<Response> {
     return failure("UNAUTHORIZED", 401, false, requestId);
   }
 
+  const accessToken = authorization.slice("Bearer ".length);
   const supabase = createClient(supabaseUrl, supabaseKey, {
     auth: { autoRefreshToken: false, persistSession: false },
+    global: { headers: { Authorization: authorization } },
   });
-  const { data, error } = await supabase.auth.getUser(
-    authorization.slice("Bearer ".length),
-  );
+  const { data, error } = await supabase.auth.getUser(accessToken);
   if (error || !data.user) {
     return failure("UNAUTHORIZED", 401, false, requestId);
-  }
-
-  const role = data.user.app_metadata?.education_role as
-    | EducationRole
-    | undefined;
-  if (role !== "student" && role !== "teacher" && role !== "admin") {
-    return failure("FORBIDDEN", 403, false, requestId);
   }
 
   let rawBody: unknown;
@@ -334,17 +327,45 @@ export async function handleRequest(request: Request): Promise<Response> {
   }
   const body = validateRequest(rawBody);
   if (!body) return failure("INVALID_REQUEST", 400, false, requestId);
-  if (
-    body.feature === "quiz.generate" && role !== "teacher" && role !== "admin"
-  ) {
+
+  // Use the caller-scoped JWT for this query so school_memberships RLS limits
+  // the result to memberships belonging to the authenticated user.
+  const { data: memberships, error: membershipError } = await supabase
+    .from("school_memberships")
+    .select("role")
+    .eq("user_id", data.user.id)
+    .eq("status", "active");
+  if (membershipError) {
+    console.warn(
+      JSON.stringify({ requestId, error: "membership_lookup_failed" }),
+    );
+    return failure("AUTHORIZATION_LOOKUP_FAILED", 503, true, requestId);
+  }
+
+  const roles = (memberships ?? []).map((membership) =>
+    membership.role as EducationRole
+  );
+  const canExplain = roles.some((role) =>
+    role === "student" || role === "teacher" || role === "admin"
+  );
+  const canGenerateQuiz = roles.some((role) =>
+    role === "teacher" || role === "admin"
+  );
+  if (body.feature === "quiz.generate" ? !canGenerateQuiz : !canExplain) {
     return failure("FORBIDDEN", 403, false, requestId);
   }
+
+  const authorizedRoles = body.feature === "quiz.generate"
+    ? roles.filter((role) => role === "teacher" || role === "admin")
+    : roles.filter((role) =>
+      role === "student" || role === "teacher" || role === "admin"
+    );
 
   console.info(
     JSON.stringify({
       requestId,
       feature: body.feature,
-      role,
+      roles: [...new Set(authorizedRoles)],
       event: "request_accepted",
     }),
   );

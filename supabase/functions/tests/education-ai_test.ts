@@ -28,7 +28,7 @@ function assertEquals<T>(actual: T, expected: T, message: string): void {
 }
 
 async function withMockServices<T>(
-  role: "student" | "teacher" | "admin",
+  role: "student" | "teacher" | "admin" | "parent",
   values: Record<string, string>,
   run: (
     providerCalls: () => number,
@@ -60,10 +60,13 @@ async function withMockServices<T>(
         id: "test-user-123",
         aud: "authenticated",
         role: "authenticated",
-        app_metadata: { education_role: role },
+        app_metadata: {},
         user_metadata: {},
         created_at: "2026-01-01T00:00:00Z",
       });
+    }
+    if (url.includes("/rest/v1/school_memberships?")) {
+      return Response.json([{ role }]);
     }
     if (url === providerUrl) {
       providerCallCount += 1;
@@ -194,6 +197,20 @@ Deno.test("student role cannot generate teacher quiz drafts", async () => {
   );
 });
 
+Deno.test("parent membership alone cannot use education AI features", async () => {
+  await withMockServices("parent", {}, async (providerCalls) => {
+    const response = await handleRequest(post({
+      feature: "lesson.explain",
+      lessonText: "A force is a push or pull that can change motion.",
+      question: "What is a force?",
+    }));
+    const body = await response.json();
+    assertEquals(response.status, 403, "parent forbidden status");
+    assertEquals(body.error.code, "FORBIDDEN", "error code");
+    assertEquals(providerCalls(), 0, "provider calls");
+  });
+});
+
 Deno.test("teacher receives a schema-checked quiz draft without identity data", async () => {
   await withMockServices(
     "teacher",
@@ -258,10 +275,13 @@ Deno.test("malformed model quiz output is rejected", async () => {
             id: "test-user-123",
             aud: "authenticated",
             role: "authenticated",
-            app_metadata: { education_role: "teacher" },
+            app_metadata: {},
             user_metadata: {},
             created_at: "2026-01-01T00:00:00Z",
           });
+        }
+        if (requestUrl(input).includes("/rest/v1/school_memberships?")) {
+          return Response.json([{ role: "teacher" }]);
         }
         return Response.json({
           choices: [{ message: { content: "not valid quiz json" } }],
