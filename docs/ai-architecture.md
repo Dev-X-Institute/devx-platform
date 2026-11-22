@@ -1,6 +1,6 @@
 # Platform AI architecture
 
-**Status:** A Python/LlamaIndex worker scaffold with a mock provider is in place. Supabase Queue/task persistence, app enqueue functions, a production AI provider, and worker deployment remain pending.
+**Status:** A Python/LlamaIndex worker scaffold with a mock provider and the shared `ai_tasks` lifecycle table are in place. Supabase Queue consumption, app enqueue functions, a production AI provider, and worker deployment remain pending.
 
 ## Goals
 
@@ -172,7 +172,7 @@ Before selecting any of these for a pilot, record a feature owner, authorized ro
 4. Implement one narrow education function and feature end to end (quiz drafts), including authentication, authorization, validation, limits, safe usage logging, and teacher review.
 5. Evaluate against a curated, non-identifying set of examples; record quality, malformed-output, latency, and cost results. Add the study helper only after its grounding and privacy behavior are acceptable.
 6. Add feedback/usage views and operational budget controls before pilot rollout; repeat provider and privacy review before real student use.
-7. Extend the Python/LlamaIndex scaffold with a Supabase queue consumer and protected task repository; add the `ai_tasks` schema and an education-specific enqueue path with task state access, retries, cancellation, tool allowlists, and human approval before enabling agent actions.
+7. Extend the Python/LlamaIndex scaffold with a Supabase queue consumer and protected task repository; add an education-specific enqueue path with task state access, retries, cancellation, tool allowlists, and human approval before enabling agent actions. The shared lifecycle schema is in place, but it does not yet publish queue messages or persist worker transitions.
 
 ## Decisions to settle before production
 

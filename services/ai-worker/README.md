@@ -19,9 +19,9 @@ Supabase credential, network call, or student record is needed for the demo.
 The demo payload includes synthetic lesson text to make the example runnable.
 Production queue messages should contain only a task ID and minimal routing
 metadata. A worker repository should load the trusted task record and its
-authorized source references. The planned `ai_tasks` table, queue consumer,
-Supabase adapter, persistence, retries, cancellation, and deployment packaging
-are not implemented yet.
+authorized source references. The `ai_tasks` lifecycle table exists, but the
+queue consumer, Supabase adapter, task persistence integration, retries,
+cancellation, and deployment packaging are not implemented yet.
 
 LlamaIndex Workflow state is currently in memory for one execution. The
 Supabase queue and task record are intended to provide durable task delivery
@@ -81,8 +81,9 @@ server-side environment and network access:
 
 1. Start the stack from the repository root with `supabase start`; get the API
    URL and local keys with `supabase status`.
-2. Add the durable `pgmq` queue and protected `ai_tasks` schema through a
-   migration. Queue messages should contain `{ "task_id": "..." }` only.
+2. Apply the migration that creates the protected `ai_tasks` table, then add a
+   durable `pgmq` queue. Queue messages should contain `{ "task_id": "..." }`
+   only.
 3. For a PostgREST queue adapter, create the `pgmq_public` wrappers and expose
    `pgmq_public` in `supabase/config.toml`, then restart the local stack. Keep
    queue RPC permissions server-only. Alternatively, a direct Postgres adapter
@@ -95,8 +96,8 @@ server-side environment and network access:
 
 ### Supabase platform
 
-1. Enable Supabase Queues/`pgmq` and create the durable queue and task table
-   through migrations or the project dashboard.
+1. Apply the `ai_tasks` migration and enable Supabase Queues/`pgmq`; create the
+   durable queue through migrations or the project dashboard.
 2. Deploy the app-specific Edge Function. It writes the task row and enqueues
    only the task ID; clients cannot publish directly to the worker queue.
 3. Deploy this worker as a separate container or persistent worker service with
