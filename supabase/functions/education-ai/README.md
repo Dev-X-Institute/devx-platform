@@ -10,9 +10,11 @@ authorization, request validation, and response validation still run.
 1. Start the local Supabase stack with `supabase start`.
 2. Copy `.env.example` to `supabase/.env.local` and run
    `supabase functions serve education-ai --env-file supabase/.env.local`.
-3. Sign in as a local user whose **app metadata** contains
-   `education_role: "student"`, `"teacher"`, or `"admin"`. Quiz generation
-   requires `teacher` or `admin`.
+3. Sign in as a local user with an **active row in `school_memberships`**.
+   Explanations are available to students, teachers, and admins; quiz
+   generation requires a teacher or admin membership. The function reads this
+   role from the database rather than Auth app metadata. Membership creation is
+   intentionally restricted to a trusted admin/provisioning workflow.
 4. POST to `http://127.0.0.1:54321/functions/v1/education-ai` with the access
    token as a Bearer token and one of these JSON bodies:
 

@@ -1,0 +1,6 @@
+Metadata-Version: 2.4
+Name: devx-ai-worker
+Version: 0.1.0
+Summary: Shared Python AI task harness for DevX apps
+Requires-Python: >=3.11
+Requires-Dist: llama-index-core<0.15,>=0.14.26

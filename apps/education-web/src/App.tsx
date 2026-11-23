@@ -36,15 +36,17 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>(getScreen);
   const [role, setRole] = useState<EducationRole>(() => roleFor(getScreen()));
   const [menuOpen, setMenuOpen] = useState(false);
-  const [toast, setToast] = useState("");
+  const [toast, setToast] = useState<{ message: string; undo?: () => boolean } | null>(null);
+  const [toastPaused, setToastPaused] = useState(false);
   const auth = useEducationAuth();
+  const notify = (message: string, undo?: () => boolean) => setToast({ message, undo });
   const demo = useDemoData();
   const main = useRef<HTMLElement>(null);
   const menuButton = useRef<HTMLButtonElement>(null);
   const sidebar = useRef<HTMLElement>(null);
   const navigate: Navigate = (next) => {
-    if (auth.configured && auth.activeMembership && !allowedFor(auth.activeMembership.role).includes(next)) return;
-    if (["admin", "teacher", "student-home", "fees", "shop", "reports", "parent", "teacher-quizzes"].includes(next)) setRole(roleFor(next));
+    if (["admin", "teacher", "student-home", "progress", "fees", "shop", "reports", "parent", "teacher-quizzes"].includes(next)) setRole(roleFor(next));
+    else if (next === "students") setRole(current => current === "admin" ? "admin" : "teacher");
     if (next !== screen) window.location.hash = next;
     setMenuOpen(false);
   };
@@ -113,11 +115,11 @@ export default function App() {
       <header className="mobile-header" inert={menuOpen}><Brand /><button ref={menuButton} className="button outline" aria-expanded={menuOpen} aria-controls="sidebar" onClick={() => setMenuOpen(!menuOpen)}><Icon name={menuOpen ? "close" : "menu"} />{menuOpen ? "Close" : "Menu"}</button></header>
       <aside ref={sidebar} id="sidebar" className={`sidebar ${menuOpen ? "open" : ""}`} role={menuOpen ? "dialog" : undefined} aria-modal={menuOpen ? true : undefined} aria-label={menuOpen ? "Navigation menu" : undefined}>
         <Brand />
-        <div className="workspace-context"><span className="workspace-icon"><Icon name="school" size={22} /></span><div>{auth.configured && auth.activeMembership ? <><strong>{auth.activeMembership.school_name}</strong><span>{auth.activeMembership.role}</span></> : <><strong>School workspace</strong><span>Term 1, 2026</span></>}</div></div>
-        {auth.configured && auth.memberships.length > 1 && <label className="screen-picker">School<select aria-label="Active school" value={auth.activeMembership?.id ?? ""} onChange={e => auth.selectMembership(e.target.value)}>{auth.memberships.map(item => <option key={item.id} value={item.id}>{item.school_name}</option>)}</select></label>}
+        <button className="button outline menu-close" onClick={() => { setMenuOpen(false); requestAnimationFrame(() => menuButton.current?.focus()); }}><Icon name="close" />Close navigation</button>
+        <div className="workspace-context"><span className="workspace-icon"><Icon name="school" size={22} /></span><div><strong>School workspace</strong><span>Term 1, 2026</span></div></div>
         <p className="nav-label">{role === "admin" ? "School management" : role === "teacher" ? "Teaching workspace" : "Your classroom"}</p>
-        <nav aria-label="Main navigation">{links.map(([label, target]) => <a key={target} href={`#${target}`} className={screen === target ? "active" : ""} aria-current={screen === target ? "page" : undefined} onClick={() => setMenuOpen(false)}><Icon name={navIcons[target] ?? "dashboard"} />{label}{screen === target && <span className="nav-current" />}</a>)}<a className="sign-out" href={auth.configured ? "#sign-in" : "#sign-in"} onClick={e => { setMenuOpen(false); if (auth.configured) { e.preventDefault(); void auth.signOut(); } }}><Icon name="logout" />Sign out</a></nav>
-        <div className="sidebar-footer"><div className="profile-context"><span className="profile-avatar"><Icon name={role === "student" ? "book" : role === "teacher" ? "school" : "shield"} /></span><div><strong>{role === "admin" ? "Administrator" : role === "teacher" ? "Class teacher" : "Student"}</strong><span>{role === "student" ? "JHS 2" : "School workspace"}</span></div></div><span className="demo-label">Frontend preview</span><ScreenPicker value={screen} navigate={(next) => { setRole(roleFor(next)); navigate(next); }} /></div>
+        <nav aria-label="Main navigation">{links.map(([label, target]) => <a key={target} href={`#${target}`} className={screen === target ? "active" : ""} aria-current={screen === target ? "page" : undefined} onClick={() => setMenuOpen(false)}><Icon name={navIcons[target] ?? "dashboard"} />{label}{screen === target && <span className="nav-current" />}</a>)}<a className="sign-out" href="#sign-in" onClick={() => setMenuOpen(false)}><Icon name="logout" />Sign out</a></nav>
+        <div className="sidebar-footer"><div className="profile-context"><span className="profile-avatar"><Icon name={role === "student" ? "book" : role === "teacher" ? "school" : "shield"} /></span><div><strong>{role === "admin" ? "Administrator" : role === "teacher" ? "Class teacher" : "Student"}</strong><span>{role === "student" ? "JHS 2" : "School workspace"}</span></div></div><span className="demo-label">Frontend preview</span><ScreenPicker value={screen} navigate={(next) => { if (next !== "students") setRole(roleFor(next)); navigate(next); }} /></div>
       </aside>
     </>}
     <main ref={main} id="main-content" tabIndex={-1} inert={menuOpen} className={standalone ? "standalone" : "main-content"}>

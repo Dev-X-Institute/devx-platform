@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "devx-ai-worker"
+version = "0.1.0"
+description = "Shared Python AI task harness for DevX apps"
+requires-python = ">=3.11"
+dependencies = ["llama-index-core>=0.14.26,<0.15"]
+
+[project.scripts]
+devx-ai-worker = "devx_ai_worker.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

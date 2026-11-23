@@ -1,6 +1,6 @@
 # Platform AI architecture
 
-**Status:** Education Edge Function scaffold is in place; provider selection and production integration remain pending.
+**Status:** A Python/LlamaIndex worker scaffold with a mock provider, the shared `ai_tasks` lifecycle table, and a durable Supabase `ai_tasks` queue are in place. Queue consumption, app enqueue functions, a production AI provider, and worker deployment remain pending.
 
 ## Goals
 
@@ -44,7 +44,7 @@ App screen
 
 ## Long-running and agentic tasks
 
-For long-running or multi-step work, use an event-driven worker rather than treating an Edge Function as a persistent agent runtime. The app still owns its entry point and policy: `education-ai` authorizes an education task and enqueues it; another app uses its own function and app-specific checks. The worker/harness can be shared infrastructure, but it must retain the task's app and feature context and enforce that feature's tool and data policy.
+For long-running or multi-step work, use an event-driven worker rather than treating an Edge Function as a persistent agent runtime. The selected direction is a shared Python worker using LlamaIndex Workflows for orchestration and Supabase Queues (`pgmq`) for durable message delivery. The app still owns its entry point and policy: `education-ai` authorizes an education task and enqueues it; another app uses its own function and app-specific checks. The worker/harness can be shared infrastructure, but it must retain the task's app and feature context and enforce that feature's tool and data policy. LlamaIndex workflow state is currently in-memory; durable task state belongs in Supabase, with workflow checkpoint/resume to be added if a feature needs it.
 
 ```text
 App frontend
@@ -68,7 +68,7 @@ Recommended lifecycle:
 4. The frontend reads task status through an authenticated, owner-scoped/RLS-protected endpoint or subscription. Realtime is an optional notification path, not an authorization mechanism; clients must still be permitted to read the task. Polling can be the initial fallback.
 5. Retry only transient failures, with bounded backoff and idempotent task effects. After the retry limit, move the task to a dead-letter/review state and expose a safe failure message. Support cancellation and stale-task cleanup.
 
-The queue and worker technology remains an infrastructure decision. Supabase Edge Functions can accept and enqueue the task, but the consumer should run in a worker or harness suited to durable background processing. Keep the queue message small and avoid copying sensitive user data into it; use the task ID to fetch protected task data. The worker uses server-side credentials with the minimum access needed and never exposes service-role or provider secrets to the app. App-specific function entry points remain the only public initiation boundary; do not expose a generic client-callable agent runner.
+Supabase Queues is pull-based, so the Python worker runs as a separate process/container and claims work from `pgmq`; the Edge Function only accepts, authorizes, records, and enqueues. The durable `ai_tasks` queue is provisioned by `20261122130000_ai_tasks_queue.sql`, but no producer or consumer is connected yet. Keep each message to `{ "task_id": "<uuid>" }`; the task row is the source of truth. Do not expose queue operations through the Data API or to browser clients. The worker uses server-side credentials with the minimum access needed and never exposes service-role or provider secrets to the app. App-specific function entry points remain the only public initiation boundary; do not expose a generic client-callable agent runner. The initial scaffold and local/hosted setup notes are in [`services/ai-worker/`](../services/ai-worker/README.md).
 
 Use this pattern only when work exceeds a short request/response interaction or needs durable retries, progress, external tools, or multiple coordinated model steps. A quiz draft or lesson explanation that fits within the synchronous limits should stay on the direct Edge Function path.
 
@@ -132,7 +132,7 @@ The education app is the first consumer, not the owner of the shared AI transpor
 
 Prompts, education permissions, lesson-scoped grounding, teacher approval, student-facing copy, and education-specific evaluation examples belong to the education feature/function. The common request envelope, authentication pattern, provider adapter, output validation mechanics, rate limits, and operational metadata can be reused by other apps.
 
-The current `MockAiProvider` still supports the quiz generator's local preview. A server-side `education-ai` Edge Function scaffold now accepts `quiz.generate` and `lesson.explain`, verifies Supabase Auth, checks the trusted education role claim, applies input/output bounds, and requires an explicit provider approval flag before calling an OpenAI-compatible endpoint. The provider is still unselected and unconfigured, and the frontend is not wired to this function yet. There are no course/enrollment tables, so course-level authorization must be added before live use with real lessons or student records.
+The current `MockAiProvider` still supports the quiz generator's local preview. A server-side `education-ai` Edge Function scaffold accepts `quiz.generate` and `lesson.explain`, verifies Supabase Auth, checks active roles from `school_memberships`, applies input/output bounds, and requires an explicit provider approval flag before calling an OpenAI-compatible endpoint. A separate Python/LlamaIndex worker scaffold demonstrates task routing and an offline mock provider; the current Edge Function does not enqueue to it. The provider is still unselected and unconfigured, and the frontend is not wired to this function yet. The current task payload accepts caller-supplied lesson text, so production use with real student records still requires server-side lesson resolution and course-scoped authorization.
 
 ## Other education features under consideration
 
@@ -172,7 +172,7 @@ Before selecting any of these for a pilot, record a feature owner, authorized ro
 4. Implement one narrow education function and feature end to end (quiz drafts), including authentication, authorization, validation, limits, safe usage logging, and teacher review.
 5. Evaluate against a curated, non-identifying set of examples; record quality, malformed-output, latency, and cost results. Add the study helper only after its grounding and privacy behavior are acceptable.
 6. Add feedback/usage views and operational budget controls before pilot rollout; repeat provider and privacy review before real student use.
-7. Add a queue and worker only when a feature needs durable long-running or multi-step execution. Start with an education-specific enqueue function and task policy; define task state access, retries, cancellation, tool allowlists, and human approval before enabling agent actions.
+7. Extend the Python/LlamaIndex scaffold with a Supabase queue consumer and protected task repository; add an education-specific enqueue path with task state access, retries, cancellation, tool allowlists, and human approval before enabling agent actions. The lifecycle table and durable queue are provisioned, but no producer/consumer currently publishes messages or persists worker transitions.
 
 ## Decisions to settle before production
 
@@ -182,6 +182,6 @@ Before selecting any of these for a pilot, record a feature owner, authorized ro
 - What request quotas and monthly spend limits apply per user, app, and environment?
 - Which outputs may be persisted, and which require human approval?
 - What is the supported behavior when AI is unavailable: retry, queue, mock/demo mode, or feature disabled?
-- Which queue and worker/harness will run durable tasks, and how will it receive narrowly scoped credentials and the owning app's policy?
+- Where will the shared Python worker run, and which least-privilege credential path will it use to claim queue messages and access task records?
 - Which agent tools and side effects are allowed per app, and which require human approval?
 - What task retention, progress visibility, cancellation, retry, and dead-letter behavior does each app require?

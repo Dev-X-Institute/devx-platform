@@ -1,12 +1,12 @@
 # Education data model and AI interaction plan
 
-**Status:** Planning proposal. No schema or application code is implemented by this document.
+**Status:** The education foundation and shared `ai_tasks` lifecycle table are implemented. The durable Supabase `ai_tasks` queue is provisioned by `20261122130000_ai_tasks_queue.sql`; feature result tables, queue adapters, and app-specific task enqueue flows remain planned.
 
-This plan describes the education data that should exist before AI features use real school records, and how the `education-ai` Edge Function should read and write that data. Names are provisional; migrations should follow only after tenancy, role, retention, and product decisions are settled.
+This plan describes the education data that should exist before AI features use real school records, and how the `education-ai` Edge Function should read and write that data. The initial schema is in migrations; later feature tables still require decisions about tenancy, role, retention, and product behavior.
 
 ## Current function boundary
 
-[`supabase/functions/education-ai/index.ts`](../supabase/functions/education-ai/index.ts) currently accepts caller-supplied `lessonText`, authenticates the Supabase user, reads a global `education_role` from trusted `app_metadata`, validates the request, and calls a configured OpenAI-compatible endpoint. `quiz.generate` is limited to teacher/admin roles and returns a review-required draft; `lesson.explain` returns an answer. The function does not read or write education tables, establish course membership, persist drafts, or record AI task/usage rows.
+[`supabase/functions/education-ai/index.ts`](../supabase/functions/education-ai/index.ts) currently accepts caller-supplied `lessonText`, authenticates the Supabase user, reads active roles from that user's `school_memberships` rows under RLS, validates the request, and calls a configured OpenAI-compatible endpoint. `quiz.generate` is allowed when the user has a teacher/admin membership and returns a review-required draft; `lesson.explain` is allowed for student/teacher/admin memberships. The function does not scope the request to a particular school or course, persist drafts, or record AI task/usage rows.
 
 This is adequate for a scaffold using synthetic content. Before it handles real lessons or student records, the function should accept record identifiers and bounded feature parameters, then load content server-side after checking the caller's school and record access. A global role claim alone cannot represent a user who has different roles in different schools.
 
@@ -36,7 +36,7 @@ This is a staged model, not a requirement to create every table at once. The ini
 
 | Entity | Purpose and boundary |
 | --- | --- |
-| `ai_tasks` (or `ai_runs` for synchronous-only work) | One row per accepted AI operation: `id`, `request_id`, `school_id`, `created_by`, `feature_key`, `status`, minimal `input_refs`, source revision IDs/hashes, prompt/config version, provider/model identifier, timestamps, bounded usage metadata, and a safe failure code. Do not store raw prompts, full lesson bodies, student names, or chain-of-thought by default. Statuses should be constrained, e.g. `queued`, `running`, `succeeded`, `failed`, `cancelled`, `needs_review`. |
+| `ai_tasks` | Implemented in `20261122120000_ai_tasks.sql`. One row per accepted operation: task and request IDs, optional idempotency key, app/feature/schema identifiers, optional school scope, creator, lifecycle status, source and result references, prompt/provider/model identifiers, bounded usage metadata, a safe failure code, attempt limits, deadlines, and lifecycle timestamps. It intentionally stores references rather than prompts, full lesson bodies, student names, generated prose, or chain-of-thought. |
 | `quiz_drafts` and `report_comment_drafts` | Domain-specific editable output, linked to `ai_tasks` and source records. Include review state, creator/reviewer, reviewed/published timestamps, and the final destination reference. The generated text lives here if it must be retained; avoid duplicating it in generic task JSON. |
 | `ai_reviews` (optional) | Reviewer action and structured feedback category linked to the task/draft. Avoid free-form student data in feedback. Define access and retention before enabling this table. |
 | `notification_outbox` (later) | Durable delivery state for fee/attendance notifications: recipient relationship, approved template/version, minimal message parameters, idempotency key, due/sent times, attempts, and provider delivery ID. Keep it separate from AI tasks because message scheduling and delivery are deterministic operations. |
@@ -52,6 +52,7 @@ Treat school membership and relationship tables as the authorization source. The
 - Students can read their own permitted learning records. Teachers can access learners only through courses they teach. School administrators are scoped to their own school.
 - Guardians can read only the records allowed by an active `student_guardians` link and the school's guardian policy; do not grant broad access to all students in a school.
 - Clients must not directly insert or update AI task status, generated drafts, approvals, or published assessment records. Route these transitions through the authorized Edge Function or a narrowly scoped server path.
+- The current `ai_tasks` read policies allow an owner with an active school membership to read their own school-scoped task, and an active school admin to read tasks for that school. Non-school tasks are owner-readable. Client insert/update/delete privileges are withheld.
 - A function should query with the caller's JWT/RLS context where practical. If a service-role client is needed for a worker, recheck task ownership, school scope, and current authorization in trusted code; never expose that key to the browser.
 - Add indexes for common policy predicates and access paths: `(school_id, user_id, status)` on memberships, `(school_id, course_id, user_id, status)` on course memberships, `(school_id, student_id, submitted_at)` on attempts, and `(school_id, created_by, created_at)` on AI tasks. Confirm actual query plans when implementation begins.
 
@@ -96,7 +97,7 @@ Use the same education data foundation differently by feature:
 - **Parent/admin assistant:** retrieve through allowlisted, role-scoped queries. Parent retrieval is limited to actively linked children; administrators remain school-scoped. A general database query tool is not exposed to the model.
 - **Attendance notifications:** attendance state changes drive deterministic outbox entries. The AI system does not decide whether a student was absent or whether a guardian should be notified.
 
-## Decisions before migrations
+## Next decisions before app workflow integration
 
 1. Can users belong to multiple schools, and what roles can they hold per school/course?
 2. What guardian verification, consent, and contact preferences control child-record access and notifications?
@@ -106,4 +107,4 @@ Use the same education data foundation differently by feature:
 6. What are the retention and correction rules for attempts, attendance, fees, AI metadata, and delivery records?
 7. Which operations run synchronously, and which require a queue/worker, cancellation, retries, or review state?
 
-Resolve these in feature-specific decisions before implementing migrations. Then implement a small initial schema, RLS policies, and authorization tests before connecting real student data to the model provider.
+Resolve these in feature-specific decisions before adding result tables or connecting real student data to a model provider. Queue messages should contain only a `task_id`; the `ai_tasks` row remains the lifecycle source of truth. The queue is not exposed through the Data API, and no worker database adapter or Edge Function enqueue flow is implemented yet.
