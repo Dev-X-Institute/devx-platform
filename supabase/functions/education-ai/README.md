@@ -1,39 +1,66 @@
-# education-ai local mock provider
+# `education-ai` enqueue function
 
-The function supports `AI_PROVIDER=mock` for local end-to-end checks. It
-returns deterministic quiz questions or explanations without calling an
-external AI provider or requiring an AI key. The normal authentication,
-authorization, request validation, and response validation still run.
+This function is the `education-web` entry point for background AI work. It
+verifies the caller's Supabase access token, validates the feature request, and
+calls `enqueue_education_ai_task` with a server-only service-role client. That
+database function atomically creates the `ai_tasks` row, writes the short-lived
+feature input, and publishes a queue
+message containing only `{ "task_id": "<uuid>" }`.
 
-## Run locally
+The function does not read school data, authorize lesson access, call a model,
+or return generated content. The worker must reload the task, confirm that the
+lesson still exists and that the task owner has current course/school access,
+then load lesson content and process the feature. The Edge Function returns
+`202 Accepted` with `taskId`, `requestId`, and `status: "queued"`.
 
-1. Start the local Supabase stack with `supabase start`.
-2. Copy `.env.example` to `supabase/.env.local` and run
-   `supabase functions serve education-ai --env-file supabase/.env.local`.
-3. Sign in as a local user with an **active row in `school_memberships`**.
-   Explanations are available to students, teachers, and admins; quiz
-   generation requires a teacher or admin membership. The function reads this
-   role from the database rather than Auth app metadata. Membership creation is
-   intentionally restricted to a trusted admin/provisioning workflow.
-4. POST to `http://127.0.0.1:54321/functions/v1/education-ai` with the access
-   token as a Bearer token and one of these JSON bodies:
+## Request shapes
 
-   ```json
-   {
-     "feature": "lesson.explain",
-     "lessonText": "Plants use sunlight, water, and carbon dioxide to make sugar.",
-     "question": "What does sunlight help the plant do?"
-   }
-   ```
+Explanation:
 
-   ```json
-   {
-     "feature": "quiz.generate",
-     "lessonText": "Plants use sunlight, water, and carbon dioxide to make sugar.",
-     "count": 2
-   }
-   ```
+```json
+{
+  "feature": "lesson.explain",
+  "lessonId": "<lesson UUID>",
+  "question": "What does sunlight help the plant do?",
+  "idempotencyKey": "<optional client-generated key>"
+}
+```
 
-The mock explanation is `Mock explanation for: <question>`. Quiz mode returns
-the requested number of four-option questions marked `reviewRequired: true`.
-Do not set `AI_PROVIDER=mock` in a deployed environment.
+Quiz draft:
+
+```json
+{
+  "feature": "quiz.generate",
+  "lessonId": "<lesson UUID>",
+  "count": 2,
+  "idempotencyKey": "<optional client-generated key>"
+}
+```
+
+The function verifies the Supabase user before parsing the body. The database
+RPC is executable only by `service_role`, repeats the feature/input bounds,
+and receives `created_by` from the function's verified user result. It enqueues
+in the same transaction as task creation. Reusing an
+idempotency key for the same user and feature returns the existing task.
+
+## Local setup
+
+1. Apply all migrations with the Supabase CLI. This adds the protected task
+   table, private short-lived input table, queue, and enqueue RPC.
+2. Start the local Edge Function with `supabase functions serve education-ai`.
+   Configure `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and
+   `SUPABASE_SERVICE_ROLE_KEY` for the local function. The service-role key is
+   used only server-side for the restricted enqueue RPC; no AI provider secret
+   is needed here.
+3. Sign in as any authenticated local user and send one of the request shapes
+   above to `http://127.0.0.1:54321/functions/v1/education-ai` with a Bearer
+   token.
+4. Confirm the response is `202` and inspect `public.ai_tasks` and the private
+   `pgmq` queue using a trusted local database session.
+
+The request will remain queued until the separate Python worker consumer is
+implemented and running. Task input rows carry a 24-hour `expires_at` value;
+that value does not delete rows automatically. The worker must delete inputs
+after terminal processing, and production needs cleanup for orphaned expired
+inputs. Do not expose the `private` schema or queue functions to browser
+clients.

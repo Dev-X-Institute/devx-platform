@@ -4,6 +4,7 @@ src/devx_ai_worker/__init__.py
 src/devx_ai_worker/__main__.py
 src/devx_ai_worker/cli.py
 src/devx_ai_worker/contracts.py
+src/devx_ai_worker/worker.py
 src/devx_ai_worker/workflow.py
 src/devx_ai_worker.egg-info/PKG-INFO
 src/devx_ai_worker.egg-info/SOURCES.txt

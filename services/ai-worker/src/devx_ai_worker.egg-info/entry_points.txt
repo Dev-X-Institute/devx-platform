@@ -1,2 +1,3 @@
 [console_scripts]
 devx-ai-worker = devx_ai_worker.cli:main
+devx-ai-worker-service = devx_ai_worker.worker:main
