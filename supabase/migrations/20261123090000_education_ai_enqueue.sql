@@ -56,7 +56,7 @@ begin
   end if;
 
   if p_feature_key = 'lesson.explain' then
-    if (select count(*) from jsonb_object_keys(p_payload)) <> 3
+    if (select count(*) from jsonb_object_keys(p_payload)) <> 2
       or not (p_payload ? 'question')
       or exists (
         select 1 from jsonb_object_keys(p_payload) as keys(key)
@@ -104,7 +104,7 @@ begin
   ) values (
     'education-web', p_feature_key, caller_id, p_idempotency_key,
     jsonb_build_object('lesson_id', lesson_id_text)
-  ) returning id, request_id, status
+  ) returning ai_tasks.id, ai_tasks.request_id, ai_tasks.status
     into created_task_id, created_request_id, created_status;
 
   insert into private.education_ai_task_inputs (task_id, payload)

@@ -43,6 +43,18 @@ python -m pip install -e .
 python -m devx_ai_worker
 ```
 
+## Run worker unit tests
+
+With the worker's Python dependencies installed, run from this directory:
+
+```powershell
+$env:PYTHONPATH = "src"
+python -m unittest discover -s tests -v
+```
+
+The unit tests use fake database cursors and the deterministic mock provider.
+They do not connect to Supabase or send lesson data to an external model.
+
 Expected result includes `status: succeeded` and a mock explanation. The AI
 dependency is `llama-index-core`, which provides LlamaIndex Workflows;
 `psycopg` connects the worker to Supabase Postgres. Provider integrations are
