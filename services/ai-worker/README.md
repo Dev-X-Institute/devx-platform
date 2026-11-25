@@ -43,7 +43,7 @@ python -m pip install -e .
 python -m devx_ai_worker
 ```
 
-## Run worker unit tests
+## Run worker tests
 
 With the worker's Python dependencies installed, run from this directory:
 
@@ -52,8 +52,10 @@ $env:PYTHONPATH = "src"
 python -m unittest discover -s tests -v
 ```
 
-The unit tests use fake database cursors and the deterministic mock provider.
-They do not connect to Supabase or send lesson data to an external model.
+The unit tests use fake database cursors, and workflow integration tests exercise
+lesson explanation and quiz drafting through LlamaIndex with the deterministic
+mock provider. They do not connect to Supabase or send lesson data to an
+external model.
 
 Expected result includes `status: succeeded` and a mock explanation. The AI
 dependency is `llama-index-core`, which provides LlamaIndex Workflows;
