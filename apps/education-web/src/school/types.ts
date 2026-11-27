@@ -78,6 +78,7 @@ export interface GradingScheme {
 }
 
 export interface SchoolState extends SchoolRecords {
+  balance: number;
   actor: Actor;
   subjects: Subject[];
   teacherAssignments: TeacherAssignment[];

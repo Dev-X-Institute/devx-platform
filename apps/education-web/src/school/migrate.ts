@@ -36,6 +36,7 @@ export function migrateSchoolState(raw: unknown, seed: SchoolState): SchoolState
   const next: SchoolState = { ...seed };
 
   if (isText(saved.schoolName)) next.schoolName = saved.schoolName;
+  if (isNumber(saved.balance)) next.balance = saved.balance;
   if (Array.isArray(saved.students) && saved.students.every(student => isObject(student) && isNumber(student.id) && isText(student.name))) next.students = saved.students as SchoolState["students"];
   if (Array.isArray(saved.study)) next.study = saved.study as SchoolState["study"];
   if (Array.isArray(saved.payments)) next.payments = saved.payments as SchoolState["payments"];

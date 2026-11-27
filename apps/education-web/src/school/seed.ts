@@ -80,6 +80,7 @@ export function seedSchoolState(): SchoolState {
   const marks: Mark[] = [];
   return {
     ...records,
+    balance: 650,
     actor: { role: "admin", userId: "admin" },
     subjects: subjects.map(subject => ({ ...subject })),
     teachers: seededTeachers.map(teacher => ({ ...teacher })),

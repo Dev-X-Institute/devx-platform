@@ -27,7 +27,7 @@ export const initialProducts: Product[] = [
   { id: 2, name: "Exercise books", price: 30, stock: 120, kind: "books" },
   { id: 3, name: "Sportswear", price: 95, stock: 5, kind: "sports" },
 ];
-export interface DemoState extends SchoolState { completed: number[]; quizScore: number | null; fees: number[]; products: Product[]; orders: Order[]; balance: number; drafts: QuizQuestion[]; published: boolean }
+export interface DemoState extends SchoolState { completed: number[]; quizScore: number | null; fees: number[]; products: Product[]; orders: Order[]; drafts: QuizQuestion[]; published: boolean }
 export function initialDemo(): DemoState { return { ...seedSchoolState(), completed: [0, 1], quizScore: null, fees: [1200, 100, 80, 120], products: initialProducts, orders: [{ id: 1002, item: "School uniform", collected: false }, { id: 1001, item: "Exercise books", collected: true }], balance: 650, drafts: [], published: false }; }
 const storageKey = "devx-education-demo-v2";
 const legacyStorageKey = "devx-education-demo-v1";
