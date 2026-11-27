@@ -10,6 +10,7 @@ import {
   computePosition,
   computeSubjectScore,
   computeTermAverage,
+  gradeFor,
   migrateSchoolState,
   recordInPersonPayment,
   saveGradingScheme,
@@ -162,4 +163,10 @@ test("PDF renders long conduct and promotion text", () => {
   const report = buildReport(state, 1, "Term 1");
   expect(report.conduct).toBe(conduct);
   expect(report.promotion).toBe("promoted");
+});
+
+test("gradeFor resolves the matching band from the selected scheme", () => {
+  const state = seedSchoolState();
+  expect(gradeFor(state.gradingSchemes[0]!, 70)).toEqual({ grade: "B3", remark: "Good" });
+  expect(gradeFor(state.gradingSchemes[1]!, 70)).toEqual({ grade: "B3", remark: "Very good" });
 });

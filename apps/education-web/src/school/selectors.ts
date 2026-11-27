@@ -23,7 +23,7 @@ export function selectGradingScheme(state: SchoolState, schoolName: string, clas
 const percentage = (mark: Mark) => mark.max > 0 ? mark.score / mark.max : 0;
 const average = (values: number[]) => values.reduce((sum, value) => sum + value, 0) / values.length;
 
-function gradeFor(scheme: GradingScheme, total: number) {
+export function gradeFor(scheme: GradingScheme, total: number) {
   const band = scheme.bands.find(item => total >= item.min && total <= item.max);
   return { grade: band?.grade ?? "", remark: band?.remark ?? "" };
 }

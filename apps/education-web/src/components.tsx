@@ -34,7 +34,7 @@ export function Stats({ values }: { values: [string, string | number][] }) {
   return <div className="stats-grid">{values.map(([label, value]) => <Card key={label} className="stat-card"><div className="stat-top"><p className="muted">{label}</p><span className="stat-icon"><Icon name={iconFor(label)} size={18} /></span></div><strong className="stat-value">{value}</strong></Card>)}</div>;
 }
 export function ClassSelect({ value, onChange }: { value: string; onChange: (value: string) => void }) {
-  return <label className="inline-label">Class<select value={value} onChange={e => onChange(e.target.value)}>{["JHS 1", "JHS 2", "JHS 3", "SHS 1"].map(c => <option key={c}>{c}</option>)}</select></label>;
+  return <label className="inline-label">Class<select aria-label="Class" value={value} onChange={e => onChange(e.target.value)}>{["JHS 1", "JHS 2", "JHS 3", "SHS 1"].map(c => <option key={c}>{c}</option>)}</select></label>;
 }
 export function Modal({ title, children, close }: { title: string; children: ReactNode; close: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);

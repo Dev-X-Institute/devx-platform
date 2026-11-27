@@ -4,6 +4,10 @@ import { useEducationAuth } from "./auth";
 import { SignIn, StudentHome, Course, Quiz, Progress } from "./screens/Learning";
 import { TeacherDashboard, TeacherQuizzes, Students } from "./screens/Teaching";
 import { AdminDashboard, Fees, Shop, Reports, ParentView } from "./screens/School";
+import { Subjects } from "./screens/Subjects";
+import { Grading } from "./screens/Grading";
+import { Marks } from "./screens/Marks";
+import { ActorPicker } from "./school/ActorPicker";
 import { Brand, EmptyState, ScreenPicker } from "./components";
 import { useDemoData } from "./demo";
 import { Icon, type IconName } from "./icons";
@@ -13,6 +17,7 @@ export const screens = {
   quiz: "Quiz", teacher: "Teacher dashboard", admin: "Administrator dashboard",
   fees: "School fees", shop: "School shop", reports: "Report cards", parent: "Parent view",
   progress: "My progress", students: "Students", "teacher-quizzes": "Quizzes",
+  subjects: "Subjects", grading: "Grading schemes", marks: "Marks",
 } as const;
 export type Screen = keyof typeof screens;
 export type Navigate = (screen: Screen) => void;
@@ -21,15 +26,15 @@ const getScreen = (): Screen => {
   return Object.hasOwn(screens, value) ? value as Screen : "sign-in";
 };
 const roleFor = (screen: Screen): EducationRole =>
-  ["admin", "fees", "shop", "reports", "parent"].includes(screen) ? "admin" :
-  ["teacher", "teacher-quizzes", "students"].includes(screen) ? "teacher" : "student";
+  ["admin", "fees", "shop", "reports", "parent", "subjects", "grading"].includes(screen) ? "admin" :
+  ["teacher", "teacher-quizzes", "students", "marks"].includes(screen) ? "teacher" : "student";
 const landingFor = (role: EducationRole): Screen => role === "admin" ? "admin" : role === "teacher" ? "teacher" : role === "parent" ? "parent" : "student-home";
 const allowedFor = (role: EducationRole): Screen[] => role === "admin"
-  ? ["admin", "fees", "shop", "reports", "students"]
-  : role === "teacher" ? ["teacher", "teacher-quizzes", "students", "course", "quiz"]
+  ? ["admin", "fees", "shop", "reports", "students", "subjects", "grading", "marks"]
+  : role === "teacher" ? ["teacher", "teacher-quizzes", "students", "course", "quiz", "marks"]
     : role === "parent" ? ["parent"]
       : ["student-home", "course", "quiz", "progress"];
-const navIcons: Partial<Record<Screen, IconName>> = { admin: "dashboard", teacher: "dashboard", "student-home": "home", course: "book", progress: "chart", "teacher-quizzes": "quiz", students: "students", fees: "fees", shop: "shop", reports: "report" };
+const navIcons: Partial<Record<Screen, IconName>> = { admin: "dashboard", teacher: "dashboard", "student-home": "home", course: "book", progress: "chart", "teacher-quizzes": "quiz", students: "students", fees: "fees", shop: "shop", reports: "report", subjects: "book", grading: "report", marks: "quiz" };
 const PreviewTools = import.meta.env.DEV ? lazy(() => import("./PreviewTools")) : null;
 
 export default function App() {
@@ -45,7 +50,7 @@ export default function App() {
   const menuButton = useRef<HTMLButtonElement>(null);
   const sidebar = useRef<HTMLElement>(null);
   const navigate: Navigate = (next) => {
-    if (["admin", "teacher", "student-home", "progress", "fees", "shop", "reports", "parent", "teacher-quizzes"].includes(next)) setRole(roleFor(next));
+    if (["admin", "teacher", "student-home", "progress", "fees", "shop", "reports", "parent", "teacher-quizzes", "subjects", "grading", "marks"].includes(next)) setRole(roleFor(next));
     else if (next === "students") setRole(current => current === "admin" ? "admin" : "teacher");
     if (next !== screen) window.location.hash = next;
     setMenuOpen(false);
@@ -54,7 +59,7 @@ export default function App() {
     const update = () => {
       const next = getScreen();
       setScreen(next);
-      if (["admin", "teacher", "student-home", "progress", "fees", "shop", "reports", "parent", "teacher-quizzes"].includes(next)) setRole(roleFor(next));
+      if (["admin", "teacher", "student-home", "progress", "fees", "shop", "reports", "parent", "teacher-quizzes", "subjects", "grading", "marks"].includes(next)) setRole(roleFor(next));
       else if (next === "students") setRole(current => current === "admin" ? "admin" : "teacher");
       setMenuOpen(false);
     };
@@ -99,6 +104,9 @@ export default function App() {
     case "shop": content = <Shop {...props} />; break;
     case "reports": content = <Reports {...props} />; break;
     case "parent": content = <ParentView {...props} />; break;
+    case "subjects": content = <Subjects {...props} />; break;
+    case "grading": content = <Grading {...props} />; break;
+    case "marks": content = <Marks {...props} />; break;
   }
   const standalone = ["sign-in", "quiz", "parent"].includes(screen);
   if (auth.configured && auth.loading) return <main className="standalone" aria-live="polite">Checking your sign-in…</main>;
@@ -106,8 +114,8 @@ export default function App() {
   if (auth.configured && auth.session && !auth.activeMembership) return <main className="standalone"><section className="sign-in-panel"><div className="sign-in-form"><h1>School access is not set up yet</h1><p className="muted">Your account is signed in, but it does not have an active school membership. Ask your school administrator to grant access.</p>{auth.error && <p role="status">{auth.error}</p>}<button className="button outline full" onClick={() => void auth.signOut()}>Sign out</button></div></section></main>;
   if (auth.configured && auth.session && auth.activeMembership) return <main className="standalone"><section className="sign-in-panel"><div className="sign-in-form"><Brand /><p className="eyebrow">Authenticated school workspace</p><h1>{auth.activeMembership.school_name}</h1><p className="muted">Signed in as {auth.session.user.email ?? "your account"} · {auth.activeMembership.role}</p>{auth.memberships.length > 1 && <label>Active school<select aria-label="Active school" value={auth.activeMembership.id} onChange={e => auth.selectMembership(e.target.value)}>{auth.memberships.map(item => <option key={item.id} value={item.id}>{item.school_name} · {item.role}</option>)}</select></label>}<p className="join-note muted">Authentication and school membership are connected. Learning records will appear here when the preview screens are connected to the protected database.</p>{auth.error && <p role="status">{auth.error}</p>}<button className="button outline full" onClick={() => void auth.signOut()}>Sign out</button></div></section></main>;
   const links: [string, Screen][] = role === "admin"
-    ? [["Overview", "admin"], ["Fees", "fees"], ["Shop", "shop"], ["Report cards", "reports"], ["Students", "students"]]
-    : role === "teacher" ? [["Dashboard", "teacher"], ["Courses", "course"], ["Quizzes", "teacher-quizzes"], ["Students", "students"]]
+    ? [["Overview", "admin"], ["Fees", "fees"], ["Shop", "shop"], ["Report cards", "reports"], ["Subjects", "subjects"], ["Grading", "grading"], ["Marks", "marks"], ["Students", "students"]]
+    : role === "teacher" ? [["Dashboard", "teacher"], ["Courses", "course"], ["Quizzes", "teacher-quizzes"], ["Marks", "marks"], ["Students", "students"]]
       : [["Home", "student-home"], ["My courses", "course"], ["Progress", "progress"]];
   return <>
     <a className="skip-link" href="#main-content" onClick={e => { e.preventDefault(); main.current?.focus(); main.current?.scrollIntoView(); }}>Skip to content</a>
@@ -117,6 +125,7 @@ export default function App() {
         <Brand />
         <button className="button outline menu-close" onClick={() => { setMenuOpen(false); requestAnimationFrame(() => menuButton.current?.focus()); }}><Icon name="close" />Close navigation</button>
         <div className="workspace-context"><span className="workspace-icon"><Icon name="school" size={22} /></span><div><strong>School workspace</strong><span>Term 1, 2026</span></div></div>
+        <ActorPicker demo={demo} />
         <p className="nav-label">{role === "admin" ? "School management" : role === "teacher" ? "Teaching workspace" : "Your classroom"}</p>
         <nav aria-label="Main navigation">{links.map(([label, target]) => <a key={target} href={`#${target}`} className={screen === target ? "active" : ""} aria-current={screen === target ? "page" : undefined} onClick={() => setMenuOpen(false)}><Icon name={navIcons[target] ?? "dashboard"} />{label}{screen === target && <span className="nav-current" />}</a>)}<a className="sign-out" href="#sign-in" onClick={() => setMenuOpen(false)}><Icon name="logout" />Sign out</a></nav>
         <div className="sidebar-footer"><div className="profile-context"><span className="profile-avatar"><Icon name={role === "student" ? "book" : role === "teacher" ? "school" : "shield"} /></span><div><strong>{role === "admin" ? "Administrator" : role === "teacher" ? "Class teacher" : "Student"}</strong><span>{role === "student" ? "JHS 2" : "School workspace"}</span></div></div><span className="demo-label">Frontend preview</span><ScreenPicker value={screen} navigate={(next) => { if (next !== "students") setRole(roleFor(next)); navigate(next); }} /></div>

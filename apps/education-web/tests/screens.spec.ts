@@ -251,3 +251,42 @@ test("delivery card handles long names and contacts without overflow", async ({ 
   await expect(page.locator(".delivery-item").filter({ hasText: "Student 4" }).locator(".delivery-missing")).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
+
+test("teacher sees only assigned subjects in marks", async ({ page }, info) => {
+  await page.goto("/#marks");
+  if (info.project.name === "mobile") await page.getByRole("button", { name: "Menu", exact: true }).click();
+  await page.getByLabel("Acting as", { exact: true }).selectOption("teacher-1");
+  if (info.project.name === "mobile") await page.keyboard.press("Escape");
+  const subject = page.getByLabel("Subject", { exact: true });
+  await expect(subject).toHaveValue("mathematics");
+  expect(await subject.locator("option").allTextContents()).toEqual(["Mathematics", "Integrated Science"]);
+});
+
+test("admin can add a subject and assign a teacher", async ({ page }) => {
+  await page.goto("/#subjects");
+  await page.getByLabel("Subject name", { exact: true }).fill("French");
+  await page.getByRole("button", { name: "Add subject", exact: true }).click();
+  const row = page.locator(".subject-row").filter({ hasText: "French" });
+  await expect(row).toBeVisible();
+  await row.getByLabel("Teacher for French").selectOption("teacher-3");
+  await row.getByRole("button", { name: "Assign teacher", exact: true }).click();
+  await expect(row).toContainText("Mr. Boateng");
+});
+
+test("admin can assign a form master to a class", async ({ page }) => {
+  await page.goto("/#subjects");
+  await page.getByLabel("Class", { exact: true }).selectOption("JHS 1");
+  await page.getByLabel("Form master", { exact: true }).selectOption("teacher-3");
+  await page.getByRole("button", { name: "Assign form master", exact: true }).click();
+  await expect(page.locator(".form-master-list")).toContainText("JHS 1");
+  await expect(page.locator(".form-master-list")).toContainText("Mr. Boateng");
+});
+
+test("admin edits a grading scheme and the preview grade changes", async ({ page }) => {
+  await page.goto("/#grading");
+  await expect(page.locator(".grading-preview")).toContainText("B3");
+  await page.getByLabel("Class score weight (%)", { exact: true }).fill("60");
+  await page.getByLabel("Exam weight (%)", { exact: true }).fill("40");
+  await page.getByRole("button", { name: "Save grading scheme", exact: true }).click();
+  await expect(page.locator(".grading-preview")).toContainText("A2");
+});
