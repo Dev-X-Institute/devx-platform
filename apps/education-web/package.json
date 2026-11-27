@@ -14,16 +14,16 @@
     "@devx/ai": "*",
     "@devx/core": "*",
     "@fontsource-variable/manrope": "5.3.0",
-    "lucide-react": "1.73.0",
+    "lucide-react": "1.79.0",
     "pdf-lib": "1.17.1",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
-    "recharts": "3.10.1"
+    "recharts": "3.11.1"
   },
   "devDependencies": {
     "@playwright/test": "1.65.1",
     "@tailwindcss/vite": "^4.3.5",
-    "@types/react": "^19.3.0",
+    "@types/react": "^19.3.1",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.2.1",
     "tailwindcss": "^4.3.5",
