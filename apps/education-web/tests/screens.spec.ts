@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { readFile } from "node:fs/promises";
+import { inflateSync } from "node:zlib";
 
 const routes = ["sign-in", "student-home", "course", "quiz", "teacher", "admin", "fees", "shop", "reports", "parent", "progress", "students", "teacher-quizzes"];
 for (const route of routes) {
@@ -289,4 +290,65 @@ test("admin edits a grading scheme and the preview grade changes", async ({ page
   await page.getByLabel("Exam weight (%)", { exact: true }).fill("40");
   await page.getByRole("button", { name: "Save grading scheme", exact: true }).click();
   await expect(page.locator(".grading-preview")).toContainText("A2");
+});
+
+test("teacher cannot approve a report", async ({ page }, info) => {
+  await page.goto("/#reports");
+  if (info.project.name === "mobile") await page.getByRole("button", { name: "Menu", exact: true }).click();
+  await page.getByLabel("Acting as", { exact: true }).selectOption("teacher-1");
+  await expect(page.getByRole("button", { name: "Approve report", exact: true })).toHaveCount(0);
+});
+
+test("admin approves and report becomes read-only", async ({ page }) => {
+  await page.goto("/#reports");
+  await expect(page.getByRole("button", { name: "Approve report", exact: true })).toBeVisible();
+  await page.getByLabel("Teacher remark", { exact: true }).fill("Steady progress");
+  await page.getByLabel("Conduct", { exact: true }).fill("Excellent");
+  await page.getByLabel("Promotion", { exact: true }).selectOption("promoted");
+  await page.getByLabel("Head remark", { exact: true }).fill("Well done");
+  await page.getByRole("button", { name: "Approve report", exact: true }).click();
+  for (const label of ["Teacher remark", "Head remark", "Conduct", "Promotion"]) {
+    await expect(page.getByLabel(label, { exact: true })).toBeDisabled();
+  }
+  await expect(page.locator(".report-status")).toContainText("Approved");
+});
+
+test("in-person fee payment reduces balance", async ({ page }) => {
+  await page.goto("/#fees");
+  await expect(page.locator(".fee-balance")).toContainText("GH₵ 650.00");
+  await page.getByLabel("Payment student", { exact: true }).selectOption("2");
+  await page.getByLabel("Payment amount", { exact: true }).fill("200");
+  await page.getByLabel("Payment date", { exact: true }).fill("2026-11-27");
+  await page.getByLabel("Payment method", { exact: true }).selectOption("cash");
+  await page.getByLabel("Payment reference", { exact: true }).fill("RCP-200");
+  await page.getByRole("button", { name: "Record payment", exact: true }).click();
+  await expect(page.locator(".fee-balance")).toContainText("GH₵ 450.00");
+  await expect(page.locator(".in-person-payment")).toContainText("RCP-200");
+});
+
+test("admin downloads a PDF with the recorded report fields", async ({ page }) => {
+  await page.goto("/#reports");
+  const token = "RCPCONDUCTXYZ789";
+  await page.getByLabel("Conduct", { exact: true }).fill(`Student shows ${token} in class.`);
+  const event = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download PDF", exact: true }).click();
+  const pdf = await event;
+  const bytes = await readFile((await pdf.path())!);
+  expect(bytes.subarray(0, 4).toString("utf8")).toBe("%PDF");
+  // pdf-lib encodes text as hex strings inside Flate-compressed content streams,
+  // so the recorded conduct value only appears after inflating the streams.
+  const streamPattern = /stream\r?\n([\s\S]*?)\r?\nendstream/g;
+  const streams: string[] = [];
+  let stream: RegExpExecArray | null;
+  while ((stream = streamPattern.exec(bytes.toString("latin1"))) !== null) {
+    try {
+      streams.push(inflateSync(Buffer.from(stream[1]!, "latin1")).toString("latin1"));
+    } catch {
+      streams.push(stream[1]!);
+    }
+  }
+  expect(streams.length).toBeGreaterThan(0);
+  const content = streams.join("\n").toUpperCase();
+  const encodedToken = Buffer.from(token, "ascii").toString("hex").toUpperCase();
+  expect(content.includes(token) || content.includes(encodedToken)).toBe(true);
 });

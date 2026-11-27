@@ -524,6 +524,17 @@ table td:last-child { text-align: right; }
 .mark-summary div { background: var(--mint); border-radius: 12px; padding: 14px; }
 .mark-summary dt { color: var(--muted); font-size: 13px; }
 .mark-summary dd { margin: 4px 0 0; font-size: 22px; font-weight: 750; }
+.report-fields { display: grid; gap: 14px; }
+.report-fields label, .payment-form label { display: grid; gap: 6px; font-size: 13px; font-weight: 650; }
+.report-fields textarea, .report-fields input, .report-fields select, .payment-form input, .payment-form select { width: 100%; min-height: 42px; border: 1px solid var(--border); border-radius: 9px; padding: 9px 11px; background: var(--card-bg); color: inherit; }
+.report-fields textarea { resize: vertical; }
+.payment-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+.payment-form .inline-label { flex-direction: column; align-items: stretch; }
+.payment-form .inline-label select { width: 100%; }
+.payment-form button { grid-column: 1 / -1; }
+.fee-balance { color: var(--green); font-size: 20px; }
+.in-person-payment { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; }
+.in-person-payment small { grid-column: 1 / -1; }
 @media (max-width: 900px) {
   .school-admin-layout { grid-template-columns: 1fr; }
   .band-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -536,6 +547,7 @@ table td:last-child { text-align: right; }
   .form-grid { grid-template-columns: 1fr; }
   .mark-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .mark-row > strong { grid-column: 1 / -1; }
+  .payment-form { grid-template-columns: 1fr; }
 }
 
 /* Shared interaction and content contracts. */

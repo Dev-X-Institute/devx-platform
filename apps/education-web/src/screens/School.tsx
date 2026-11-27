@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { Badge, Brand, Card, ClassSelect, EmptyState, Modal, PageHeader, Pagination, ProductArt, ProgressBar, Stats } from "../components";
 import { csvCell, download, downloadReport, money, studentBalance, type Product, type ScreenProps } from "../demo";
+import { dateKey } from "../records";
 import { buildReport, initials } from "../report";
-import type { SchoolState } from "../school";
+import { approveReport, computePosition, recordInPersonPayment, setReportField, type PaymentMethod, type ReportField, type SchoolState } from "../school";
 import { Crest } from "../SchoolCrest";
 import { FeeEditor, ProductEditor, feeNames } from "../SchoolEditors";
 import { useFormValidation } from "../forms";
@@ -25,17 +26,54 @@ export function Fees({ demo, notify }: ScreenProps) {
   const [reminders, setReminders] = useState(false);
   const [channel, setChannel] = useState("WhatsApp");
   const [page, setPage] = useState(0);
+  const [paymentStudentId, setPaymentStudentId] = useState(2);
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentDate, setPaymentDate] = useState(dateKey());
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
+  const [paymentReference, setPaymentReference] = useState("");
+  const actor = demo.data.actor;
   const students = demo.data.students.filter(s => s.className === className);
   const balances = students.map(s => studentBalance(demo.data, s.id));
   const total = demo.data.fees.reduce((a, b) => a + b, 0);
   const currentPage = Math.min(page, Math.max(0, Math.ceil(students.length / 20) - 1));
+  const inPersonPayments = demo.data.payments.filter(payment => payment.method).slice(-5).reverse();
   const exportFees = () => {
     download("student-payments.csv", ["Student,Class,Balance (GHS),Status", ...students.map((s, i) => [s.name, s.className, balances[i]!, balances[i] === 0 ? "Paid" : balances[i]! < total ? "Part-paid" : "Unpaid"].map(csvCell).join(","))].join("\n"));
     notify("Student payments exported.");
   };
+  const recordPayment = () => {
+    const amount = Number(paymentAmount);
+    if (!Number.isFinite(amount) || amount <= 0) { notify("Enter a payment amount greater than zero."); return; }
+    try {
+      const next = recordInPersonPayment(demo.data, actor, {
+        studentId: paymentStudentId,
+        amount,
+        date: paymentDate,
+        method: paymentMethod,
+        reference: paymentReference.trim() || undefined,
+      });
+      const undo = demo.update(() => next);
+      setPaymentAmount("");
+      setPaymentReference("");
+      notify("In-person payment recorded.", undo);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "That payment could not be recorded.");
+    }
+  };
   return <><PageHeader eyebrow="School management / Term 1" title="School fees" name={demo.data.schoolName}><button className="button outline" onClick={exportFees} disabled={!students.length}><Icon name="download" size={18} />Export</button><button className="button primary" disabled={!balances.some(b => b > 0)} onClick={() => setReminders(true)}>Send reminders (WhatsApp or email)</button></PageHeader>
-    <div className="fees-layout"><Card><h2>Fee structure, Term 1</h2>{feeNames.map((name, i) => <div className="list-row" key={name}><span>{name}</span><strong>{money(demo.data.fees[i]!)}</strong></div>)}<button className="button outline section-spaced" onClick={() => setEdit(true)}>Edit fee structure</button></Card>
-      <Card><div className="card-heading"><h2>Student payments</h2><ClassSelect value={className} onChange={value => { setClassName(value); setPage(0); }} /></div>{students.length ? <><div className="table-wrap"><table className="responsive-table"><caption className="sr-only">School fee payments for {className}</caption><thead><tr><th>Student</th><th>Class</th><th>Balance</th><th>Status</th></tr></thead><tbody>{students.slice(currentPage * 20, (currentPage + 1) * 20).map(student => { const balance = studentBalance(demo.data, student.id); return <tr key={student.id}><th scope="row" dir="auto">{student.name}</th><td data-label="Class" className="muted">{className}</td><td data-label="Balance">{money(balance)}</td><td data-label="Status"><Badge tone={balance === 0 ? "green" : balance < total ? "amber" : "red"}>{balance === 0 ? "Paid" : balance < total ? "Part-paid" : "Unpaid"}</Badge></td></tr>; })}</tbody></table></div><Pagination page={currentPage} count={students.length} size={20} onPage={setPage} /></> : <EmptyState icon="students" title="No student payments" description="Choose another class to see available student records." />}</Card></div>
+    <div className="fees-layout"><Card><h2>Fee structure, Term 1</h2>{feeNames.map((name, i) => <div className="list-row" key={name}><span>{name}</span><strong>{money(demo.data.fees[i]!)}</strong></div>)}<button className="button outline section-spaced" onClick={() => setEdit(true)} disabled={actor.role !== "admin"}>Edit fee structure</button></Card>
+      <Card><div className="card-heading"><h2>Student payments</h2><ClassSelect value={className} onChange={value => { setClassName(value); setPage(0); }} /></div>{students.length ? <><div className="table-wrap"><table className="responsive-table"><caption className="sr-only">School fee payments for {className}</caption><thead><tr><th>Student</th><th>Class</th><th>Balance</th><th>Status</th></tr></thead><tbody>{students.slice(currentPage * 20, (currentPage + 1) * 20).map(student => { const balance = studentBalance(demo.data, student.id); return <tr key={student.id}><th scope="row" dir="auto">{student.name}</th><td data-label="Class" className="muted">{className}</td><td data-label="Balance">{money(balance)}</td><td data-label="Status"><Badge tone={balance === 0 ? "green" : balance < total ? "amber" : "red"}>{balance === 0 ? "Paid" : balance < total ? "Part-paid" : "Unpaid"}</Badge></td></tr>; })}</tbody></table></div><Pagination page={currentPage} count={students.length} size={20} onPage={setPage} /></> : <EmptyState icon="students" title="No student payments" description="Choose another class to see available student records." />}</Card>
+      {actor.role === "admin" && <Card className="in-person-card"><div className="card-heading"><h2>Record in-person payment</h2><span className="demo-label">Administrator only</span></div><p className="muted fee-balance">Student 2 outstanding balance: {money(demo.data.balance)}</p><form className="payment-form" onSubmit={event => { event.preventDefault(); recordPayment(); }}>
+        <label className="inline-label">Student<select aria-label="Payment student" value={paymentStudentId} onChange={event => setPaymentStudentId(Number(event.target.value))}>{demo.data.students.map(student => <option key={student.id} value={student.id}>{student.name}</option>)}</select></label>
+        <label>Amount (GH₵)<input aria-label="Payment amount" type="number" min="0.01" step="0.01" value={paymentAmount} onChange={event => setPaymentAmount(event.target.value)} /></label>
+        <label>Date<input aria-label="Payment date" type="date" value={paymentDate} onChange={event => setPaymentDate(event.target.value)} /></label>
+        <label>Method<select aria-label="Payment method" value={paymentMethod} onChange={event => setPaymentMethod(event.target.value as PaymentMethod)}><option value="cash">Cash</option><option value="bank-transfer">Bank transfer</option><option value="mobile-money">Mobile money</option><option value="other">Other</option></select></label>
+        <label>Reference<input aria-label="Payment reference" value={paymentReference} onChange={event => setPaymentReference(event.target.value)} placeholder="Receipt number" /></label>
+        <button className="button primary" type="submit">Record payment</button>
+      </form>
+      <div className="card-heading section-spaced"><h3>Recorded in person</h3><span className="demo-label">Most recent first</span></div>{inPersonPayments.length ? <div className="list-row-group">{inPersonPayments.map(payment => <div className="list-row in-person-payment" key={payment.id}><span>{demo.data.students.find(student => student.id === payment.studentId)?.name ?? "Student"}</span><strong>{money(payment.amount)}</strong><small className="demo-label">{payment.reference || payment.date}</small></div>)}</div> : <p className="demo-label">No in-person payments recorded yet.</p>}
+    </Card>}
+    </div>
     {edit && <Modal title="Edit fee structure" close={() => setEdit(false)}><FeeEditor fees={demo.data.fees} save={fees => { const undo = demo.update(d => ({ fees, balance: Math.max(0, fees.reduce((a, b) => a + b, 0) - d.payments.filter(p => p.studentId === 2).reduce((sum, p) => sum + p.amount, 0)) })); setEdit(false); notify("Term 1 fee structure saved in the preview.", undo); }} /></Modal>}
     {reminders && <Modal title="Fee reminder preview" close={() => setReminders(false)}><p className="muted">Prepare reminders for {balances.filter(b => b > 0).length} parents in {className} with outstanding balances.</p><label>Delivery channel<select value={channel} onChange={e => setChannel(e.target.value)}><option>WhatsApp</option><option>Email</option></select></label><div className="message-preview">Hello [PARENT NAME], the school fee balance for [STUDENT NAME] is [BALANCE]. Please use your parent link to view the balance and payment options.</div><p className="demo-label">Frontend preview. Messages are saved as a draft and are not sent.</p><button className="button primary full" onClick={() => { const drafts = students.filter(s => studentBalance(demo.data, s.id) > 0).map(s => `Student: ${s.name}\nParent contact: ${s.contact ?? "Missing contact"}\nHello [PARENT NAME], the school fee balance for ${s.name} is ${money(studentBalance(demo.data, s.id))}. Please use your parent link to view the balance and payment options.`); download("fee-reminder-draft.txt", [`Channel: ${channel}`, `Class: ${className}`, "Drafts only — no messages sent.", ...drafts].join("\n\n"), "text/plain"); setReminders(false); notify("Fee reminder draft downloaded."); }}>Save reminder draft</button></Modal>}
   </>;
@@ -70,12 +108,50 @@ export function Reports({ demo, notify, navigate }: ScreenProps) {
   const [className, setClassName] = useState("JHS 2");
   const [studentId, setStudentId] = useState(1);
   const [delivery, setDelivery] = useState(false);
+  const actor = demo.data.actor;
   const students = demo.data.students.filter(s => s.className === className);
   const reportStudent = students.find(s => s.id === studentId) ?? students[0];
   const activeStudentId = reportStudent?.id ?? 1;
   const contacts = students.filter(s => s.contact).length;
-  return <><PageHeader eyebrow={`${term}, ${className}`} title="Report cards" name={demo.data.schoolName}><button className="button outline" disabled={!reportStudent} onClick={() => { void downloadReport(demo.data, activeStudentId, term).then(() => notify(`Report generated for ${reportStudent?.name ?? "the selected student"}, ${term}.`)).catch(() => notify("The report could not be generated.")); }}>Generate selected report</button><button className="button primary" disabled={!students.length} onClick={() => setDelivery(true)}>Send to parents</button></PageHeader><div className="filters"><label className="inline-label">Term<select value={term} onChange={e => setTerm(e.target.value)}>{["Term 1", "Term 2", "Term 3"].map(t => <option key={t}>{t}</option>)}</select></label><ClassSelect value={className} onChange={value => { setClassName(value); setStudentId(demo.data.students.find(s => s.className === value)?.id ?? 1); }} /><label className="inline-label">Student<select value={activeStudentId} onChange={e => setStudentId(Number(e.target.value))}>{students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label></div>
-    <div className="reports-layout"><Card className="report-card"><ReportContent data={demo.data} studentId={activeStudentId} term={term} /><button className="text-button report-download" disabled={!reportStudent} onClick={() => { void downloadReport(demo.data, activeStudentId, term).then(() => notify(`Report card downloaded for ${reportStudent?.name ?? "the selected student"}.`)).catch(() => notify("The report could not be generated.")); }}>Download PDF</button></Card><Card><div className="card-heading"><h2>Delivery to parents</h2><span className="demo-label">Local contact preview</span></div><p className="muted delivery-description">Review the saved parent contacts before preparing a delivery draft.</p>{students.length > 0 && <div className="delivery-coverage"><div className="delivery-coverage-head"><span>{contacts} of {students.length} parents have contact details</span></div><ProgressBar value={(contacts / students.length) * 100} label="Parent contact coverage" /></div>}<ul className="delivery-list">{students.slice(0, 5).map(s => <li className="delivery-item" key={s.id}><span className="delivery-avatar" aria-hidden="true" dir="auto">{initials(s.name)}</span><div className="delivery-copy"><strong dir="auto">{s.name}</strong>{s.contact ? <span className="delivery-contact"><Icon name="mail" size={15} />{s.contact}</span> : <span className="delivery-missing"><Icon name="alert" size={15} />No parent contact on file</span>}</div><Badge tone={s.contact ? "green" : "red"}>{s.contact ? "Ready" : "Needs contact"}</Badge></li>)}</ul>{!students.length && <EmptyState icon="students" title="No students in this class" description="Choose another class to review parent contacts." />}{students.length > 5 && <button className="text-button" onClick={() => navigate("students")}>View all {students.length} student records</button>}<p className="demo-label">Local contact preview · no reports sent</p></Card></div>
+  const draft = demo.data.reports.find(report => report.studentId === activeStudentId && report.term === term);
+  const approved = draft?.status === "approved";
+  const isFormMaster = demo.data.formMasters.some(assignment => assignment.className === className && assignment.teacherId === actor.userId);
+  const canEditReport = !!draft && !approved && (actor.role === "admin" || isFormMaster);
+  const canEditHeadRemark = !!draft && !approved && actor.role === "admin";
+  const updateField = (field: ReportField, value: string) => {
+    if (!draft) return;
+    try {
+      demo.update(() => setReportField(demo.data, actor, draft.id, field, value));
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "That report field could not be saved.");
+    }
+  };
+  const approve = () => {
+    if (!draft) return;
+    try {
+      const position = computePosition(demo.data, draft.className, term, draft.studentId);
+      const next = approveReport(demo.data, actor, draft.id, position);
+      const undo = demo.update(() => next);
+      notify(`Report approved for ${reportStudent?.name ?? "the selected student"}.`, undo);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "The report could not be approved.");
+    }
+  };
+  return <><PageHeader eyebrow={`${term}, ${className}`} title="Report cards" name={demo.data.schoolName}><button className="button outline" disabled={!reportStudent} onClick={() => { void downloadReport(demo.data, activeStudentId, term).then(() => notify(`Report generated for ${reportStudent?.name ?? "the selected student"}, ${term}.`)).catch(() => notify("The report could not be generated.")); }}>Generate selected report</button><button className="button primary" disabled={!students.length} onClick={() => setDelivery(true)}>Send to parents</button></PageHeader><div className="filters"><label className="inline-label">Term<select aria-label="Term" value={term} onChange={e => setTerm(e.target.value)}>{["Term 1", "Term 2", "Term 3"].map(t => <option key={t}>{t}</option>)}</select></label><ClassSelect value={className} onChange={value => { setClassName(value); setStudentId(demo.data.students.find(s => s.className === value)?.id ?? 1); }} /><label className="inline-label">Student<select aria-label="Report student" value={activeStudentId} onChange={e => setStudentId(Number(e.target.value))}>{students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label></div>
+    <div className="reports-layout"><div className="panel-stack"><Card className="report-card"><ReportContent data={demo.data} studentId={activeStudentId} term={term} /><button className="text-button report-download" disabled={!reportStudent} onClick={() => { void downloadReport(demo.data, activeStudentId, term).then(() => notify(`Report card downloaded for ${reportStudent?.name ?? "the selected student"}.`)).catch(() => notify("The report could not be generated.")); }}>Download PDF</button></Card>
+      <Card className="report-editor"><div className="card-heading"><h2>Report approval</h2><Badge tone={approved ? "green" : "amber"}><span className="report-status">{approved ? "Approved" : "Draft"}</span></Badge></div>
+        {!draft ? <EmptyState icon="report" title="No draft for this term" description="Term 1 reports are prepared in this demo. Choose Term 1 to edit or approve a report." />
+          : <><p className="muted">{approved ? "This report is approved. Marks and report fields are frozen." : actor.role === "admin" ? "Administrator: you may edit every field and approve this report." : isFormMaster ? "Form master: you may edit the class teacher fields. Only an administrator can approve." : "Only the form master or an administrator may edit this report."}</p>
+            <div className="report-fields">
+              <label>Teacher remark<textarea aria-label="Teacher remark" rows={3} value={draft.teacherRemark} disabled={!canEditReport} onChange={event => updateField("teacherRemark", event.target.value)} /></label>
+              <label>Conduct<input aria-label="Conduct" value={draft.conduct} disabled={!canEditReport} onChange={event => updateField("conduct", event.target.value)} /></label>
+              <label>Promotion<select aria-label="Promotion" value={draft.promotion} disabled={!canEditReport} onChange={event => updateField("promotion", event.target.value)}><option value="promoted">Promoted</option><option value="not-promoted">Not promoted</option><option value="repeat">Repeat</option></select></label>
+              <label>Head remark<textarea aria-label="Head remark" rows={3} value={draft.headRemark} disabled={!canEditHeadRemark} onChange={event => updateField("headRemark", event.target.value)} /></label>
+            </div>
+            {actor.role === "admin" && !approved && <button className="button primary section-spaced" onClick={approve}>Approve report</button>}
+          </>}
+      </Card></div>
+      <Card><div className="card-heading"><h2>Delivery to parents</h2><span className="demo-label">Local contact preview</span></div><p className="muted delivery-description">Review the saved parent contacts before preparing a delivery draft.</p>{students.length > 0 && <div className="delivery-coverage"><div className="delivery-coverage-head"><span>{contacts} of {students.length} parents have contact details</span></div><ProgressBar value={(contacts / students.length) * 100} label="Parent contact coverage" /></div>}<ul className="delivery-list">{students.slice(0, 5).map(s => <li className="delivery-item" key={s.id}><span className="delivery-avatar" aria-hidden="true" dir="auto">{initials(s.name)}</span><div className="delivery-copy"><strong dir="auto">{s.name}</strong>{s.contact ? <span className="delivery-contact"><Icon name="mail" size={15} />{s.contact}</span> : <span className="delivery-missing"><Icon name="alert" size={15} />No parent contact on file</span>}</div><Badge tone={s.contact ? "green" : "red"}>{s.contact ? "Ready" : "Needs contact"}</Badge></li>)}</ul>{!students.length && <EmptyState icon="students" title="No students in this class" description="Choose another class to review parent contacts." />}{students.length > 5 && <button className="text-button" onClick={() => navigate("students")}>View all {students.length} student records</button>}<p className="demo-label">Local contact preview · no reports sent</p></Card></div>
     {delivery && <Modal title="Prepare report delivery" close={() => setDelivery(false)}><p>Prepare a delivery draft for {className}, {term}.</p><p className="muted">{contacts} parents have contact details. {students.length - contacts} student records need a parent contact before delivery.</p><p className="demo-label">Frontend preview. No email or WhatsApp messages will be sent.</p><button className="button primary full" onClick={() => { download("report-delivery-draft.csv", ["Student,Class,Term,Contact,Status", ...students.map(s => [s.name, className, term, s.contact ?? "", s.contact ? "Prepared" : "Missing contact"].map(csvCell).join(","))].join("\n")); setDelivery(false); notify("Report delivery draft downloaded."); }}>Save delivery draft</button></Modal>}
   </>;
 }
