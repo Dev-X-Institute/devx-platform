@@ -8,11 +8,11 @@ async function dataset(page: Page, mode: string) {
 
 test("inline validation focuses the invalid field and keeps forms open", async ({ page }) => {
   await page.goto("/#sign-in");
-  await page.getByRole("button", { name: "Sign in as student", exact: true }).click();
+  await page.getByRole("button", { name: "Preview as student", exact: true }).click();
   await expect(page.getByLabel("Email", { exact: true })).toBeFocused();
   await expect(page.getByText("Email is required.", { exact: true })).toBeVisible();
   await page.getByLabel("Email", { exact: true }).fill("invalid");
-  await page.getByRole("button", { name: "Sign in as student", exact: true }).click();
+  await page.getByRole("button", { name: "Preview as student", exact: true }).click();
   await expect(page.getByText("Enter a valid email address.")).toBeVisible();
   await page.goto("/#shop");
   await page.getByRole("button", { name: "Add item", exact: true }).click();
@@ -38,7 +38,7 @@ test("payment updates analytics and undo restores balance and history", async ({
   await page.getByRole("button", { name: "Undo last change" }).click();
   await expect(page.locator(".analytics-card").getByRole("row", { name: "JHS 2 39", exact: true })).toBeVisible();
   await page.reload();
-  const balance = await page.evaluate(() => JSON.parse(localStorage.getItem("devx-education-demo-v1")!).balance);
+  const balance = await page.evaluate(() => JSON.parse(localStorage.getItem("devx-education-demo-v2")!).balance);
   expect(balance).toBe(650);
 });
 
@@ -121,7 +121,7 @@ test("loading and error previews recover without replacing saved data", async ({
 test("temporary stress data respects stock limits and leaves saved records unchanged", async ({ page }) => {
   await page.goto("/#course");
   await page.getByRole("button", { name: "Mark lesson complete", exact: true }).click();
-  const saved = await page.evaluate(() => localStorage.getItem("devx-education-demo-v1"));
+  const saved = await page.evaluate(() => localStorage.getItem("devx-education-demo-v2"));
   await dataset(page, "worst");
   await page.evaluate(() => { location.hash = "parent"; });
   const row = page.locator(".parent-shop .list-row").filter({ hasText: "Exercise books" });
@@ -132,7 +132,7 @@ test("temporary stress data respects stock limits and leaves saved records uncha
   await expect(row.getByRole("button", { name: "Out of stock", exact: true })).toBeDisabled();
   await page.getByRole("button", { name: "Undo last change" }).click();
   await expect(row.getByRole("button", { name: "Add", exact: true })).toBeEnabled();
-  expect(await page.evaluate(() => localStorage.getItem("devx-education-demo-v1"))).toBe(saved);
+  expect(await page.evaluate(() => localStorage.getItem("devx-education-demo-v2"))).toBe(saved);
   await page.getByLabel("Preview dataset").selectOption("demo");
   await expect(page.locator(".balance-amount")).toHaveText("GH₵ 650.00");
 });
@@ -151,7 +151,7 @@ test("storage failure reports unsaved changes and retry persists them", async ({
   await page.evaluate(() => { (window as unknown as { allowStorage: boolean }).allowStorage = true; });
   await page.getByRole("button", { name: "Retry saving" }).click();
   await expect(page.locator(".storage-error")).toHaveCount(0);
-  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("devx-education-demo-v1")!).completed)).toEqual([0, 1, 2]);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("devx-education-demo-v2")!).completed)).toEqual([0, 1, 2]);
 });
 
 test("mobile menu contains keyboard focus and returns focus on Escape", async ({ page }) => {
@@ -200,10 +200,10 @@ test("older saves migrate payments and malformed record arrays recover", async (
   await page.goto("/#course");
   await page.getByRole("button", { name: "Mark lesson complete", exact: true }).click();
   await page.evaluate(() => {
-    const saved = JSON.parse(localStorage.getItem("devx-education-demo-v1")!);
+    const saved = JSON.parse(localStorage.getItem("devx-education-demo-v2")!);
     for (const key of ["students", "study", "payments", "attempts"]) delete saved[key];
     saved.balance = 550;
-    localStorage.setItem("devx-education-demo-v1", JSON.stringify(saved));
+    localStorage.setItem("devx-education-demo-v2", JSON.stringify(saved));
     location.hash = "parent";
   });
   await page.reload();
@@ -212,9 +212,9 @@ test("older saves migrate payments and malformed record arrays recover", async (
   await page.getByRole("button", { name: "Pay now", exact: true }).click();
   await page.getByRole("button", { name: "Complete demo payment" }).click();
   await page.evaluate(() => {
-    const saved = JSON.parse(localStorage.getItem("devx-education-demo-v1")!);
+    const saved = JSON.parse(localStorage.getItem("devx-education-demo-v2")!);
     saved.students = [{ name: null }]; saved.study = [{ minutes: "bad" }];
-    localStorage.setItem("devx-education-demo-v1", JSON.stringify(saved));
+    localStorage.setItem("devx-education-demo-v2", JSON.stringify(saved));
     location.hash = "students";
   });
   await page.reload();
@@ -236,9 +236,9 @@ test("reminder drafts use each outstanding balance and CSV guards formula names"
   await page.getByRole("button", { name: "Edit fee structure" }).click();
   await page.getByRole("button", { name: "Save fee structure" }).click();
   await page.evaluate(() => {
-    const saved = JSON.parse(localStorage.getItem("devx-education-demo-v1")!);
+    const saved = JSON.parse(localStorage.getItem("devx-education-demo-v2")!);
     saved.students[1].name = "=SUM(1,2)";
-    localStorage.setItem("devx-education-demo-v1", JSON.stringify(saved));
+    localStorage.setItem("devx-education-demo-v2", JSON.stringify(saved));
   });
   await page.reload();
   const csvEvent = page.waitForEvent("download");

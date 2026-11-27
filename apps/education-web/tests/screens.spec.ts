@@ -26,7 +26,7 @@ test("role selection opens the administrator dashboard", async ({ page }) => {
   await page.getByRole("button", { name: "Admin", exact: true }).click();
   await page.getByLabel("Email", { exact: true }).fill("demo@school.edu.gh");
   await page.getByLabel("Password", { exact: true }).fill("preview-password");
-  await page.getByRole("button", { name: "Sign in as administrator", exact: true }).first().click();
+  await page.getByRole("button", { name: "Preview as administrator", exact: true }).first().click();
   await expect(page.getByRole("heading", { name: "Your school, at a glance.", exact: true })).toBeVisible();
 });
 
@@ -216,7 +216,7 @@ test("screen picker and mobile menu expose all reference screens", async ({ page
 
 // The app keeps sample data in memory until the first edit, so tests seed the
 // documented storage shape directly and reload to exercise the changed state.
-const storageKey = "devx-education-demo-v1";
+const storageKey = "devx-education-demo-v2";
 
 test("report download survives a school name outside the PDF font character set", async ({ page }) => {
   await page.goto("/#reports");
