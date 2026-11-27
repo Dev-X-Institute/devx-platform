@@ -177,12 +177,30 @@ test("report download is a PDF and fee export is a CSV", async ({ page }) => {
   const pdf = await pdfEvent;
   expect(pdf.suggestedFilename()).toBe("student-report.pdf");
   const content = await readFile((await pdf.path())!);
-  expect(content.subarray(0, 8).toString()).toBe("%PDF-1.4");
+  expect(content.subarray(0, 5).toString()).toBe("%PDF-");
+  // The old hand-rolled generator embedded Courier only, so Helvetica is the real
+  // signal that a vector pdf-lib document was produced. It relies on pdf.ts saving
+  // with `useObjectStreams: false`; enabling object streams would compress the font
+  // name away again, so fix pdf.ts rather than weakening this assertion.
+  expect(content.includes("Helvetica")).toBe(true);
   await page.goto("/#fees");
   const csvEvent = page.waitForEvent("download");
   await page.getByRole("button", { name: "Export", exact: true }).click();
   const csv = await csvEvent;
   expect((await readFile((await csv.path())!, "utf8")).startsWith("Student,Class,Balance (GHS),Status")).toBe(true);
+});
+
+test("report card renders model-driven subject rows", async ({ page }) => {
+  await page.goto("/#reports");
+  await expect(page.locator(".report-table tbody tr")).toHaveCount(5);
+  await expect(page.locator(".report-table tbody tr").first()).toContainText("Mathematics");
+  await expect(page.locator(".report-table tbody tr").first()).toContainText("85");
+  await expect(page.locator(".report-document")).toContainText("DevX Demo School");
+});
+
+test("report header shows the school crest", async ({ page }) => {
+  await page.goto("/#reports");
+  await expect(page.locator('.report-document .crest svg[aria-label="School crest"]')).toBeVisible();
 });
 
 test("screen picker and mobile menu expose all reference screens", async ({ page }, info) => {
@@ -193,4 +211,43 @@ test("screen picker and mobile menu expose all reference screens", async ({ page
   }
   await page.getByLabel("Explore screens").selectOption("reports");
   await expect(page.getByRole("heading", { name: "Report cards", exact: true })).toBeVisible();
+});
+
+// The app keeps sample data in memory until the first edit, so tests seed the
+// documented storage shape directly and reload to exercise the changed state.
+const storageKey = "devx-education-demo-v1";
+
+test("report download survives a school name outside the PDF font character set", async ({ page }) => {
+  await page.goto("/#reports");
+  await page.evaluate(([key, saved]) => localStorage.setItem(key, saved), [storageKey, JSON.stringify({
+    schoolName: "DevX GH₵ Academy",
+    completed: [0, 1], fees: [1200, 100, 80, 120], products: [], orders: [], balance: 650, drafts: [],
+  })] as const);
+  await page.reload();
+  const event = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download PDF", exact: true }).first().click();
+  const pdf = await event;
+  const bytes = await readFile((await pdf.path())!);
+  expect(bytes.subarray(0, 5).toString()).toBe("%PDF-");
+});
+
+test("delivery card handles long names and contacts without overflow", async ({ page }) => {
+  await page.goto("/#reports");
+  await page.evaluate(([key, saved]) => localStorage.setItem(key, saved), [storageKey, JSON.stringify({
+    schoolName: "DevX Demo School",
+    completed: [0, 1], fees: [1200, 100, 80, 120], products: [], orders: [], balance: 650, drafts: [],
+    students: [
+      { id: 1, name: "Student 1", className: "JHS 2", progress: 82, attendance: 97, contact: "parent1@school.example" },
+      { id: 2, name: "Aleksandra-Beatrice Nkrumah-Mensah", className: "JHS 2", progress: 50, attendance: 95, contact: "aleksandra.beatrice.nkrumah.mensah.parent@very-long-domain.school.example" },
+      { id: 3, name: "Student 3", className: "JHS 2", progress: 31, attendance: 84, contact: "parent3@school.example" },
+      { id: 4, name: "Student 4", className: "JHS 2", progress: 55, attendance: 92, contact: null },
+    ],
+  })] as const);
+  await page.reload();
+  await expect(page.getByText("3 of 4 parents have contact details")).toBeVisible();
+  const item = page.locator(".delivery-item").filter({ hasText: "Aleksandra" });
+  await expect(item.locator(".delivery-copy strong")).toHaveText("Aleksandra-Beatrice Nkrumah-Mensah");
+  await expect(item.locator(".delivery-contact")).toContainText("@very-long-domain.school.example");
+  await expect(page.locator(".delivery-item").filter({ hasText: "Student 4" }).locator(".delivery-missing")).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
