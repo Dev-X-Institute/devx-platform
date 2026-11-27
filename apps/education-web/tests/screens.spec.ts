@@ -194,7 +194,7 @@ test("report card renders model-driven subject rows", async ({ page }) => {
   await page.goto("/#reports");
   await expect(page.locator(".report-table tbody tr")).toHaveCount(5);
   await expect(page.locator(".report-table tbody tr").first()).toContainText("Mathematics");
-  await expect(page.locator(".report-table tbody tr").first()).toContainText("85");
+  await expect(page.locator(".report-table tbody tr").first()).toContainText("—");
   await expect(page.locator(".report-document")).toContainText("DevX Demo School");
 });
 

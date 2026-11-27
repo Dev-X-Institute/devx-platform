@@ -104,7 +104,7 @@ export function downloadBytes(name: string, bytes: Uint8Array, type = "applicati
 // Styled vector report card. `pdf.ts` is imported on demand so pdf-lib (and its
 // ~420 kB chunk) stays off first load; `report.ts` is a static import because the
 // report screen already loads it, so a dynamic import would only add a warning.
-export async function downloadReport(term = "Term 1", className = "JHS 2", schoolName = school) {
+export async function downloadReport(state: SchoolState, studentId: number, term: string, schoolName = state.schoolName) {
   const { renderReportPdf } = await import("./pdf");
-  downloadBytes("student-report.pdf", await renderReportPdf(buildReport(term, className, schoolName)));
+  downloadBytes("student-report.pdf", await renderReportPdf(buildReport({ ...state, schoolName }, studentId, term)));
 }

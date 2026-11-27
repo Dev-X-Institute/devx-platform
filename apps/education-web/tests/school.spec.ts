@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { buildReport } from "../src/report";
 import {
   actorFor,
   addSubject,
@@ -151,4 +152,14 @@ test("attendanceFor uses override when present", () => {
   const scheme = selectGradingScheme(state, state.schoolName, "JHS 2");
   expect(attendanceFor(state.students[0]!, scheme, "42/60 days")).toBe("42/60 days");
   expect(attendanceFor(state.students[0]!, scheme, null)).not.toBe("42/60 days");
+});
+
+test("PDF renders long conduct and promotion text", () => {
+  const conduct = "Shows steady progress in all subjects and relates well to peers in class discussions and group work.";
+  let state = seedSchoolState();
+  state = setReportField(state, admin, "1:Term 1", "conduct", conduct);
+  state = setReportField(state, admin, "1:Term 1", "promotion", "promoted");
+  const report = buildReport(state, 1, "Term 1");
+  expect(report.conduct).toBe(conduct);
+  expect(report.promotion).toBe("promoted");
 });

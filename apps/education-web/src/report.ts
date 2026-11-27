@@ -1,8 +1,11 @@
+import { attendanceDays, attendanceFor, computePosition, computeSubjectScore, computeTermAverage, selectGradingScheme } from "./school";
+import type { SchoolState } from "./school";
+
 export interface ReportRow {
   subject: string;
-  classScore: number;
-  exam: number;
-  total: number;
+  classScore: number | null;
+  exam: number | null;
+  total: number | null;
   grade: string;
   remark: string;
 }
@@ -17,27 +20,15 @@ export interface ReportModel {
   attendance: string;
   monogram: string;
   rows: ReportRow[];
-  average: number;
+  average: number | null;
   teacherRemark: string;
   headRemark: string;
+  conduct: string;
+  promotion: string;
+  daysPresent: number;
+  daysPossible: number;
   generatedOn: string;
 }
-
-// Single source of truth for the sample report card. Scores are declared inline
-// (rather than indexed from parallel arrays) so the model stays safe under
-// noUncheckedIndexedAccess.
-const rows: ReportRow[] = [
-  { subject: "Mathematics", classScore: 27, exam: 58 },
-  { subject: "English Language", classScore: 24, exam: 52 },
-  { subject: "Integrated Science", classScore: 26, exam: 55 },
-  { subject: "Social Studies", classScore: 25, exam: 54 },
-  { subject: "ICT", classScore: 28, exam: 60 },
-].map((row, i) => ({
-  ...row,
-  total: row.classScore + row.exam,
-  grade: i === 1 || i === 3 ? "B2" : "A1",
-  remark: i === 1 || i === 3 ? "Very good" : "Excellent",
-}));
 
 export function initials(name: string): string {
   return name
@@ -48,21 +39,38 @@ export function initials(name: string): string {
     .join("");
 }
 
-export function buildReport(term: string, className: string, schoolName: string, generatedOn = new Date().toISOString().slice(0, 10)): ReportModel {
-  const total = rows.reduce((sum, row) => sum + row.total, 0);
+/** Build a report from the stored school state; an approved report uses its frozen position. */
+export function buildReport(state: SchoolState, studentId: number, term: string, generatedOn = new Date().toISOString().slice(0, 10)): ReportModel {
+  const student = state.students.find(item => item.id === studentId);
+  if (!student) throw new Error("Student not found.");
+  const draft = state.reports.find(report => report.studentId === studentId && report.term === term);
+  const scheme = selectGradingScheme(state, state.schoolName, student.className);
+  const classSize = state.students.filter(item => item.className === student.className).length;
+  const rank = draft?.status === "approved" ? draft.position : computePosition(state, student.className, term, studentId);
+  const rows: ReportRow[] = state.subjects.map(subject => {
+    const score = computeSubjectScore(state, studentId, subject.id, term);
+    return score
+      ? { subject: subject.name, classScore: score.classScore, exam: score.exam, total: score.total, grade: score.grade, remark: score.remark }
+      : { subject: subject.name, classScore: null, exam: null, total: null, grade: "—", remark: "" };
+  });
+
   return {
-    schoolName,
+    schoolName: state.schoolName,
     term,
-    className,
-    year: 2026,
-    student: "Student 2",
-    position: "4 of 34",
-    attendance: "58 of 60 days",
-    monogram: initials(schoolName),
+    className: student.className,
+    year: Number.parseInt(generatedOn.slice(0, 4), 10),
+    student: student.name,
+    position: rank ? `${rank} of ${classSize}` : "—",
+    attendance: attendanceFor(student, scheme, draft?.attendanceOverride ?? null),
+    monogram: initials(state.schoolName),
     rows,
-    average: Math.round((total / rows.length) * 10) / 10,
-    teacherRemark: "A strong term. Keep practising regularly.",
-    headRemark: "Well done. Keep up the good work.",
+    average: computeTermAverage(state, studentId, term),
+    teacherRemark: draft?.teacherRemark ?? "",
+    headRemark: draft?.headRemark ?? "",
+    conduct: draft?.conduct ?? "",
+    promotion: draft?.promotion ?? "promoted",
+    daysPresent: attendanceDays(student, scheme),
+    daysPossible: scheme.termDays,
     generatedOn,
   };
 }

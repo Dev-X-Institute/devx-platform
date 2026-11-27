@@ -42,6 +42,25 @@ function fitText(font: PDFFont, text: string, size: number, maxWidth: number): s
   return `${safe.slice(0, end)}...`;
 }
 
+/** Wrap long report fields instead of truncating them; standard fonts cannot be subset here. */
+function wrapLines(font: PDFFont, text: string, size: number, maxWidth: number): string[] {
+  const safe = safeText(text).trim();
+  if (!safe) return ["—"];
+  const lines: string[] = [];
+  let line = "";
+  for (const word of safe.split(/\s+/)) {
+    const candidate = line ? `${line} ${word}` : word;
+    if (!line || font.widthOfTextAtSize(candidate, size) <= maxWidth) {
+      line = candidate;
+    } else {
+      lines.push(line);
+      line = word;
+    }
+  }
+  if (line) lines.push(line);
+  return lines.map(value => font.widthOfTextAtSize(value, size) > maxWidth ? fitText(font, value, size, maxWidth) : value);
+}
+
 interface Fonts {
   regular: PDFFont;
   bold: PDFFont;
@@ -153,6 +172,22 @@ export async function renderReportPdf(model: ReportModel): Promise<Uint8Array> {
     page.drawText(fitText(fonts.bold, value, 11, 240 - offset), { x: x + offset, y, size: 11, font: fonts.bold, color: ink });
   });
 
+  // Conduct can be a full sentence; wrap it in its own row rather than truncating it.
+  const conductLabel = "Conduct:";
+  const conductOffset = fonts.regular.widthOfTextAtSize(conductLabel, 10) + 6;
+  const conductLines = wrapLines(fonts.bold, model.conduct || "—", 11, CONTENT_WIDTH - conductOffset);
+  const conductTop = metaTop - 44;
+  page.drawText(conductLabel, { x: MARGIN, y: conductTop, size: 10, font: fonts.regular, color: muted });
+  conductLines.forEach((line, index) => page.drawText(line, {
+    x: MARGIN + conductOffset, y: conductTop - index * 13, size: 11, font: fonts.bold, color: ink,
+  }));
+  const promotionY = conductTop - conductLines.length * 13 - 8;
+  const promotionLabel = "Promotion:";
+  page.drawText(promotionLabel, { x: MARGIN, y: promotionY, size: 10, font: fonts.regular, color: muted });
+  page.drawText(fitText(fonts.bold, model.promotion || "—", 11, 240), {
+    x: MARGIN + fonts.regular.widthOfTextAtSize(promotionLabel, 10) + 6, y: promotionY, size: 11, font: fonts.bold, color: ink,
+  });
+
   // Table: brand-green header, zebra rows, numeric columns right-aligned.
   const columns: Column[] = [
     { label: "Subject", width: 150, align: "left" },
@@ -176,7 +211,7 @@ export async function renderReportPdf(model: ReportModel): Promise<Uint8Array> {
     return edge + (column.width - textWidth) / 2;
   };
 
-  const tableTop = metaTop - 48;
+  const tableTop = promotionY - 28;
   const headerHeight = 24;
   const rowHeight = 25;
   page.drawRectangle({ x: MARGIN, y: tableTop - headerHeight, width: CONTENT_WIDTH, height: headerHeight, color: brand });
@@ -188,7 +223,7 @@ export async function renderReportPdf(model: ReportModel): Promise<Uint8Array> {
   model.rows.forEach((row, rowIndex) => {
     const rowBottom = tableTop - headerHeight - (rowIndex + 1) * rowHeight;
     if (rowIndex % 2 === 1) page.drawRectangle({ x: MARGIN, y: rowBottom, width: CONTENT_WIDTH, height: rowHeight, color: tint });
-    const cells = [row.subject, String(row.classScore), String(row.exam), String(row.total), row.grade, row.remark];
+    const cells = [row.subject, String(row.classScore ?? "—"), String(row.exam ?? "—"), String(row.total ?? "—"), row.grade, row.remark];
     columns.forEach((column, index) => {
       const text = fitText(fonts.regular, cells[index]!, 10, column.width - 16);
       const width = fonts.regular.widthOfTextAtSize(text, 10);
