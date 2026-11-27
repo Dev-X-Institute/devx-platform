@@ -5,10 +5,15 @@ import {
   approveReport,
   assignFormMaster,
   assignTeacherToSubject,
+  attendanceFor,
+  computePosition,
+  computeSubjectScore,
+  computeTermAverage,
   migrateSchoolState,
   recordInPersonPayment,
   saveGradingScheme,
   seedSchoolState,
+  selectGradingScheme,
   setMark,
   setReportField,
 } from "../src/school";
@@ -20,6 +25,15 @@ const teacher3 = actorFor("teacher", "teacher-3");
 const mathsMark = {
   studentId: 1, subjectId: "mathematics", component: "assignment" as const,
   score: 20, max: 25, term: "Term 1", className: "JHS 2",
+};
+
+const stateWithMathsMarks = () => {
+  let state = seedSchoolState();
+  state = setMark(state, admin, mathsMark);
+  state = setMark(state, admin, { ...mathsMark, component: "homework", score: 10, max: 10 });
+  state = setMark(state, admin, { ...mathsMark, component: "quiz", score: 15, max: 20 });
+  state = setMark(state, admin, { ...mathsMark, component: "exam", score: 48, max: 60 });
+  return state;
 };
 
 test("seed data defines five subjects, three teachers, two schemes and a JHS 2 form master", () => {
@@ -95,4 +109,46 @@ test("commands refuse changes after approval", () => {
   expect(() => setMark(state, admin, mathsMark)).toThrow();
   expect(() => setReportField(state, admin, "1:Term 1", "headRemark", "Approved")).toThrow();
   expect(() => approveReport(state, admin, "1:Term 1", 3)).toThrow();
+});
+
+test("computeSubjectScore with no marks returns null score", () => {
+  expect(computeSubjectScore(seedSchoolState(), 1, "mathematics", "Term 1")).toBeNull();
+});
+
+test("recorded marks produce weighted class score, exam score and JHS grade", () => {
+  expect(computeSubjectScore(stateWithMathsMarks(), 1, "mathematics", "Term 1")).toEqual({
+    classScore: 34, exam: 48, total: 82, grade: "A1", remark: "Excellent",
+  });
+});
+
+test("changing the scheme changes the grade", () => {
+  const base = stateWithMathsMarks();
+  const shs = base.gradingSchemes.find(scheme => scheme.id === "shs-default")!;
+  const state = saveGradingScheme(base, admin, { ...shs, id: "jhs-default", appliesTo: ["JHS"] });
+  expect(computeSubjectScore(state, 1, "mathematics", "Term 1")).toMatchObject({ total: 82, grade: "A2" });
+});
+
+test("computePosition ranks students by term average", () => {
+  let state = seedSchoolState();
+  state = setMark(state, admin, { ...mathsMark, score: 25 });
+  state = setMark(state, admin, { ...mathsMark, component: "exam", score: 60, max: 60 });
+  state = setMark(state, admin, { ...mathsMark, studentId: 2, score: 5, max: 25 });
+  state = setMark(state, admin, { ...mathsMark, studentId: 2, component: "exam", score: 20, max: 60 });
+  expect(computeTermAverage(state, 1, "Term 1")).toBe(100);
+  expect(computePosition(state, "JHS 2", "Term 1", 1)).toBe(1);
+  expect(computePosition(state, "JHS 2", "Term 1", 2)).toBe(2);
+  expect(computePosition(state, "JHS 2", "Term 1", 3)).toBeNull();
+});
+
+test("selectGradingScheme prefers a level match over a school-name match", () => {
+  const state = seedSchoolState();
+  expect(selectGradingScheme(state, "DevX Demo School", "SHS 1").id).toBe("shs-default");
+  expect(selectGradingScheme(state, "Unknown School", "JHS 2").id).toBe("jhs-default");
+});
+
+test("attendanceFor uses override when present", () => {
+  const state = seedSchoolState();
+  const scheme = selectGradingScheme(state, state.schoolName, "JHS 2");
+  expect(attendanceFor(state.students[0]!, scheme, "42/60 days")).toBe("42/60 days");
+  expect(attendanceFor(state.students[0]!, scheme, null)).not.toBe("42/60 days");
 });
