@@ -15,9 +15,9 @@
     "dev:education": "npm run dev -w education-web"
   },
   "devDependencies": {
-    "@types/node": "26.6.6",
-    "only-allow": "1.2.1",
-    "turbo": "^2.11.10",
+    "@types/node": "26.6.7",
+    "only-allow": "1.2.2",
+    "turbo": "^2.11.13",
     "typescript": "^7.0.2"
   },
   "packageManager": "npm@10.9.8",
