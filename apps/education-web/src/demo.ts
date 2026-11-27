@@ -1,8 +1,9 @@
 import { useRef, useState } from "react";
 import type { QuizQuestion } from "@devx/ai";
 import type { Navigate } from "./App";
-import { dateKey, seedRecords, type SchoolRecords } from "./records";
+import { dateKey } from "./records";
 import { buildReport } from "./report";
+import { migrateSchoolState, seedSchoolState, type SchoolState } from "./school";
 
 export const school = "DevX Demo School";
 export const money = (amount: number) => `GH₵ ${amount.toLocaleString("en-GH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -26,9 +27,10 @@ export const initialProducts: Product[] = [
   { id: 2, name: "Exercise books", price: 30, stock: 120, kind: "books" },
   { id: 3, name: "Sportswear", price: 95, stock: 5, kind: "sports" },
 ];
-export interface DemoState extends SchoolRecords { completed: number[]; quizScore: number | null; fees: number[]; products: Product[]; orders: Order[]; balance: number; drafts: QuizQuestion[]; published: boolean }
-export function initialDemo(): DemoState { return { ...seedRecords(), completed: [0, 1], quizScore: null, fees: [1200, 100, 80, 120], products: initialProducts, orders: [{ id: 1002, item: "School uniform", collected: false }, { id: 1001, item: "Exercise books", collected: true }], balance: 650, drafts: [], published: false }; }
-const storageKey = "devx-education-demo-v1";
+export interface DemoState extends SchoolState { completed: number[]; quizScore: number | null; fees: number[]; products: Product[]; orders: Order[]; balance: number; drafts: QuizQuestion[]; published: boolean }
+export function initialDemo(): DemoState { return { ...seedSchoolState(), completed: [0, 1], quizScore: null, fees: [1200, 100, 80, 120], products: initialProducts, orders: [{ id: 1002, item: "School uniform", collected: false }, { id: 1001, item: "Exercise books", collected: true }], balance: 650, drafts: [], published: false }; }
+const storageKey = "devx-education-demo-v2";
+const legacyStorageKey = "devx-education-demo-v1";
 const nonnegative = (n: number) => Number.isFinite(n) && n >= 0;
 const validDate = (value: string) => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value));
 const validId = (id: number) => Number.isSafeInteger(id) && id > 0;
@@ -36,13 +38,14 @@ const lessonId = (id: number) => Number.isInteger(id) && id >= 0 && id < lessons
 function readDemo(): DemoState {
   const initial = initialDemo();
   try {
-    const saved = JSON.parse(localStorage.getItem(storageKey) ?? "null") as DemoState | null;
+    const saved = JSON.parse(localStorage.getItem(storageKey) ?? localStorage.getItem(legacyStorageKey) ?? "null") as DemoState | null;
     if (saved && Array.isArray(saved.completed) && saved.completed.every(Number.isInteger)
       && Array.isArray(saved.fees) && saved.fees.length === 4 && saved.fees.every(n => Number.isFinite(n) && n >= 0)
       && Array.isArray(saved.products) && saved.products.every(p => validId(p.id) && typeof p.name === "string" && nonnegative(p.price) && Number.isInteger(p.stock) && nonnegative(p.stock) && ["uniform", "books", "sports", "other"].includes(p.kind))
       && Array.isArray(saved.orders) && saved.orders.every(o => validId(o.id) && typeof o.item === "string" && typeof o.collected === "boolean")
       && nonnegative(saved.balance) && Array.isArray(saved.drafts) && saved.drafts.every(q => typeof q.question === "string" && Array.isArray(q.options) && q.options.length > 1 && q.options.every(o => typeof o === "string") && Number.isInteger(q.answerIndex) && q.answerIndex >= 0 && q.answerIndex < q.options.length)) {
-      const next = { ...initial, ...saved, completed: [...new Set(saved.completed.filter(n => n >= 0 && n < lessons.length))] };
+      const migrated = migrateSchoolState(saved, initial);
+      const next = { ...initial, ...saved, ...migrated, completed: [...new Set(saved.completed.filter(n => n >= 0 && n < lessons.length))] };
       for (const key of ["students", "study", "payments", "attempts"] as const) if (!Array.isArray(next[key])) Object.assign(next, { [key]: initial[key] });
       if (!next.students.every(s => validId(s.id) && typeof s.name === "string" && typeof s.className === "string" && nonnegative(s.progress) && s.progress <= 100 && nonnegative(s.attendance) && s.attendance <= 100 && (s.contact === null || typeof s.contact === "string"))) next.students = initial.students;
       if (!next.study.every(s => typeof s.id === "string" && validId(s.studentId) && lessonId(s.lessonId) && validDate(s.date) && nonnegative(s.minutes))) next.study = initial.study;

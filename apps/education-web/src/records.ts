@@ -1,7 +1,9 @@
 export const classes = ["JHS 1", "JHS 2", "JHS 3", "SHS 1"] as const;
 export interface StudentRecord { id: number; name: string; className: string; progress: number; attendance: number; contact: string | null }
 export interface StudyRecord { id: string; studentId: number; lessonId: number; date: string; minutes: number }
-export interface PaymentRecord { id: string; studentId: number; date: string; amount: number }
+import type { PaymentMethod } from "./school/types";
+
+export interface PaymentRecord { id: string; studentId: number; date: string; amount: number; method?: PaymentMethod; reference?: string; recordedBy?: string }
 export interface AttemptRecord { id: string; studentId: number; lessonId: number; date: string; score: number; total: number }
 export interface SchoolRecords { schoolName: string; students: StudentRecord[]; study: StudyRecord[]; payments: PaymentRecord[]; attempts: AttemptRecord[] }
 export function dateKey(offset = 0) { const day = new Date(); day.setUTCHours(12, 0, 0, 0); day.setUTCDate(day.getUTCDate() + offset); return day.toISOString().slice(0, 10); }
