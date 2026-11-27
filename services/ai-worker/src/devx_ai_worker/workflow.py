@@ -34,7 +34,7 @@ class AiTaskWorkflow(Workflow):
         handler = HANDLERS[(task.app_id, task.feature_key)]
         provider_request = handler.prepare(task)
         response = await create_provider().complete(provider_request)
-        result = handler.parse_result(response)
+        result = handler.parse_result(response, task)
         return StopEvent(
             result={
                 "task_id": task.task_id,

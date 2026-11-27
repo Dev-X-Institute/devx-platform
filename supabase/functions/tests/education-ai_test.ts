@@ -1,21 +1,15 @@
-import { handleRequest } from "../education-ai/index.ts";
+import {
+  createEducationAiHandler,
+  validateRequest,
+} from "../education-ai/index.ts";
 
 declare const Deno: {
-  env: {
-    get(name: string): string | undefined;
-    set(name: string, value: string): void;
-    delete(name: string): void;
-  };
   test(name: string, fn: () => void | Promise<void>): void;
 };
 
 const supabaseUrl = "https://supabase.test";
-const supabaseKey = "test-anon-key";
-const providerUrl = "https://provider.test/v1/chat/completions";
-
-function requestUrl(input: Request | URL | string): string {
-  return input instanceof Request ? input.url : input.toString();
-}
+const userId = "b7a05a25-39a1-46f0-9b0a-5a4db00f91a5";
+const lessonId = "a56b0c2a-5d8c-4d3d-9205-2daf1d218760";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -27,278 +21,179 @@ function assertEquals<T>(actual: T, expected: T, message: string): void {
   }
 }
 
-async function withMockServices<T>(
-  role: "student" | "teacher" | "admin" | "parent",
-  values: Record<string, string>,
-  run: (
-    providerCalls: () => number,
-    providerRequest: () => string | null,
-  ) => Promise<T>,
-): Promise<T> {
-  const environment = {
+function makeHandler(
+  options: { authenticated?: boolean; enqueueError?: boolean } = {},
+) {
+  const env: Record<string, string> = {
     SUPABASE_URL: supabaseUrl,
-    SUPABASE_ANON_KEY: supabaseKey,
-    AI_PROVIDER_APPROVED: "false",
-    AI_API_URL: providerUrl,
-    AI_API_KEY: "test-provider-key",
-    AI_MODEL: "test-model",
-    ...values,
+    SUPABASE_ANON_KEY: "test-anon-key",
+    SUPABASE_SERVICE_ROLE_KEY: "test-service-role-key",
   };
-  const previousEnvironment = new Map<string, string | undefined>();
-  for (const [name, value] of Object.entries(environment)) {
-    previousEnvironment.set(name, Deno.env.get(name));
-    Deno.env.set(name, value);
-  }
-
-  const originalFetch = globalThis.fetch;
-  let providerCallCount = 0;
-  let lastProviderRequest: string | null = null;
-  globalThis.fetch = async (input, init) => {
-    const url = requestUrl(input);
-    if (url.endsWith("/auth/v1/user")) {
-      return Response.json({
-        id: "test-user-123",
-        aud: "authenticated",
-        role: "authenticated",
-        app_metadata: {},
-        user_metadata: {},
-        created_at: "2026-01-01T00:00:00Z",
-      });
-    }
-    if (url.includes("/rest/v1/school_memberships?")) {
-      return Response.json([{ role }]);
-    }
-    if (url === providerUrl) {
-      providerCallCount += 1;
-      lastProviderRequest = typeof init?.body === "string" ? init.body : null;
-      const providerBody = lastProviderRequest
-        ? JSON.parse(lastProviderRequest)
-        : {};
-      const isQuiz = providerBody.messages?.[0]?.content.includes(
-        "multiple-choice quiz",
-      );
-      return Response.json({
-        choices: [{
-          message: {
-            content: isQuiz
-              ? JSON.stringify({
-                questions: [{
-                  question: "What is a force?",
-                  options: [
-                    "A push or pull",
-                    "A type of matter",
-                    "A unit of time",
-                    "A kind of energy",
-                  ],
-                  answerIndex: 0,
-                }],
-              })
-              : "A force is a push or pull that can change motion.",
+  const calls: Array<
+    { key: string; rpc?: string; args?: Record<string, unknown> }
+  > = [];
+  const handler = createEducationAiHandler({
+    getEnv: (name) => env[name],
+    createClient: (_url, key) => {
+      calls.push({ key });
+      if (key === "test-anon-key") {
+        return {
+          auth: {
+            getUser: async (token: string) => ({
+              data: {
+                user: options.authenticated === false ||
+                    token !== "valid-user-token"
+                  ? null
+                  : { id: userId },
+              },
+              error:
+                options.authenticated === false || token !== "valid-user-token"
+                  ? new Error("invalid token")
+                  : null,
+            }),
           },
-        }],
-      });
-    }
-    return new Response("Unexpected mocked request", { status: 404 });
-  };
-
-  try {
-    return await run(() => providerCallCount, () => lastProviderRequest);
-  } finally {
-    globalThis.fetch = originalFetch;
-    for (const [name, value] of previousEnvironment) {
-      if (value === undefined) Deno.env.delete(name);
-      else Deno.env.set(name, value);
-    }
-  }
+          rpc: async () => ({ data: null, error: new Error("unexpected RPC") }),
+        };
+      }
+      return {
+        auth: {
+          getUser: async () => ({
+            data: { user: null },
+            error: new Error("unexpected auth"),
+          }),
+        },
+        rpc: async (name: string, args: Record<string, unknown>) => {
+          calls.push({ key, rpc: name, args });
+          return options.enqueueError
+            ? { data: null, error: new Error("RPC failed") }
+            : {
+              data: [{
+                task_id: "task-123",
+                request_id: "request-456",
+                status: "queued",
+              }],
+              error: null,
+            };
+        },
+      };
+    },
+  });
+  return { handler, calls };
 }
 
-function post(body: unknown, withAuth = true): Request {
+function post(body: unknown, token = "valid-user-token"): Request {
   return new Request(`${supabaseUrl}/functions/v1/education-ai`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      ...(withAuth ? { Authorization: "Bearer test-user-jwt" } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify(body),
   });
 }
 
-Deno.test("OPTIONS returns CORS success", async () => {
-  const response = await handleRequest(
-    new Request(`${supabaseUrl}/functions/v1/education-ai`, {
-      method: "OPTIONS",
-    }),
-  );
-  assertEquals(response.status, 200, "OPTIONS status");
+Deno.test("valid authenticated lesson request is validated and enqueued", async () => {
+  const { handler, calls } = makeHandler();
+  const response = await handler(post({
+    feature: "lesson.explain",
+    lessonId,
+    question: "What does this lesson mean?",
+    idempotencyKey: "client-request-1",
+  }));
+  const body = await response.json();
+
+  assertEquals(response.status, 202, "accepted status");
+  assertEquals(body.taskId, "task-123", "task ID response");
+  assertEquals(calls[0].key, "test-anon-key", "authentication uses public key");
   assertEquals(
-    response.headers.get("Access-Control-Allow-Methods"),
-    "POST, OPTIONS",
-    "allowed methods",
+    calls[1].key,
+    "test-service-role-key",
+    "enqueue uses server key",
+  );
+  assertEquals(calls[2].rpc, "enqueue_education_ai_task", "enqueue RPC");
+  assertEquals(calls[2].args?.p_created_by, userId, "authenticated user ID");
+  assertEquals(calls[2].args?.p_feature_key, "lesson.explain", "feature key");
+  assertEquals(
+    JSON.stringify(calls[2].args?.p_payload),
+    JSON.stringify({
+      lesson_id: lessonId,
+      question: "What does this lesson mean?",
+    }),
+    "RPC payload",
+  );
+  assertEquals(
+    calls[2].args?.p_idempotency_key,
+    "client-request-1",
+    "idempotency key",
   );
 });
 
-Deno.test("POST without a bearer token is rejected", async () => {
-  await withMockServices("teacher", {}, async (providerCalls) => {
-    const response = await handleRequest(
-      post({
-        feature: "quiz.generate",
-        lessonText: "A sufficiently long lesson text.",
-      }, false),
-    );
-    assertEquals(response.status, 401, "unauthenticated status");
-    assertEquals(providerCalls(), 0, "provider calls");
-  });
+Deno.test("unauthenticated request does not call the enqueue RPC", async () => {
+  const { handler, calls } = makeHandler({ authenticated: false });
+  const response = await handler(
+    post({ feature: "quiz.generate", lessonId }, "invalid-token"),
+  );
+  assertEquals(response.status, 401, "unauthorized status");
+  assertEquals(calls.length, 1, "only authentication client was created");
 });
 
-Deno.test("unsupported feature payload is rejected after authentication", async () => {
-  await withMockServices("teacher", {}, async (providerCalls) => {
-    const response = await handleRequest(
-      post({
-        feature: "arbitrary.prompt",
-        lessonText: "A sufficiently long lesson text.",
-      }),
-    );
-    const body = await response.json();
-    assertEquals(response.status, 400, "invalid request status");
-    assertEquals(body.error.code, "INVALID_REQUEST", "error code");
-    assertEquals(providerCalls(), 0, "provider calls");
-  });
+Deno.test("invalid request is rejected after authentication and is not enqueued", async () => {
+  const { handler, calls } = makeHandler();
+  const response = await handler(
+    post({ feature: "quiz.generate", lessonId, count: 11 }),
+  );
+  assertEquals(response.status, 400, "invalid request status");
+  assertEquals(calls.length, 1, "RPC was not called");
 });
 
-Deno.test("AI stays disabled until the provider approval flag is enabled", async () => {
-  await withMockServices("teacher", {}, async (providerCalls) => {
-    const response = await handleRequest(post({
-      feature: "quiz.generate",
-      lessonText: "A force is a push or pull that can change motion.",
-      count: 1,
-    }));
-    const body = await response.json();
-    assertEquals(response.status, 503, "provider approval status");
-    assertEquals(body.error.code, "AI_PROVIDER_NOT_APPROVED", "error code");
-    assertEquals(providerCalls(), 0, "provider calls");
-  });
-});
-
-Deno.test("student role cannot generate teacher quiz drafts", async () => {
-  await withMockServices(
-    "student",
-    { AI_PROVIDER_APPROVED: "true" },
-    async (providerCalls) => {
-      const response = await handleRequest(post({
-        feature: "quiz.generate",
-        lessonText: "A force is a push or pull that can change motion.",
-        count: 1,
-      }));
-      const body = await response.json();
-      assertEquals(response.status, 403, "forbidden status");
-      assertEquals(body.error.code, "FORBIDDEN", "error code");
-      assertEquals(providerCalls(), 0, "provider calls");
-    },
+Deno.test("quiz request is normalized before enqueue", async () => {
+  const { handler, calls } = makeHandler();
+  const response = await handler(post({ feature: "quiz.generate", lessonId }));
+  assertEquals(response.status, 202, "accepted status");
+  assertEquals(
+    JSON.stringify(calls[2].args?.p_payload),
+    JSON.stringify({ lesson_id: lessonId, count: 5 }),
+    "default quiz count is included",
   );
 });
 
-Deno.test("parent membership alone cannot use education AI features", async () => {
-  await withMockServices("parent", {}, async (providerCalls) => {
-    const response = await handleRequest(post({
+Deno.test("RPC failure returns a retryable enqueue error", async () => {
+  const { handler } = makeHandler({ enqueueError: true });
+  const response = await handler(post({ feature: "quiz.generate", lessonId }));
+  const body = await response.json();
+  assertEquals(response.status, 503, "enqueue error status");
+  assertEquals(body.error.code, "TASK_ENQUEUE_FAILED", "enqueue error code");
+  assertEquals(body.error.retryable, true, "enqueue error is retryable");
+});
+
+Deno.test("request validator accepts only supported fields and bounds", () => {
+  assert(
+    validateRequest({ feature: "quiz.generate", lessonId, count: 10 }),
+    "valid quiz",
+  );
+  assert(
+    validateRequest({
       feature: "lesson.explain",
-      lessonText: "A force is a push or pull that can change motion.",
-      question: "What is a force?",
-    }));
-    const body = await response.json();
-    assertEquals(response.status, 403, "parent forbidden status");
-    assertEquals(body.error.code, "FORBIDDEN", "error code");
-    assertEquals(providerCalls(), 0, "provider calls");
-  });
-});
-
-Deno.test("teacher receives a schema-checked quiz draft without identity data", async () => {
-  await withMockServices(
-    "teacher",
-    { AI_PROVIDER_APPROVED: "true" },
-    async (providerCalls, providerRequest) => {
-      const response = await handleRequest(post({
-        feature: "quiz.generate",
-        lessonText: "A force is a push or pull that can change motion.",
-        count: 1,
-      }));
-      const body = await response.json();
-      assertEquals(response.status, 200, "success status");
-      assert(body.ok === true, "success envelope");
-      assert(body.data.reviewRequired === true, "teacher review is required");
-      assertEquals(body.data.questions.length, 1, "question count");
-      assertEquals(body.data.questions[0].answerIndex, 0, "answer index");
-      assertEquals(providerCalls(), 1, "provider calls");
-      assert(
-        !providerRequest()?.includes("test-user-123"),
-        "user identity must not be sent to the model",
-      );
-    },
+      lessonId,
+      question: "  Why?  ",
+    }),
+    "valid explanation",
   );
-});
-
-Deno.test("student receives a lesson-scoped explanation", async () => {
-  await withMockServices(
-    "student",
-    { AI_PROVIDER_APPROVED: "true" },
-    async (providerCalls, providerRequest) => {
-      const response = await handleRequest(post({
-        feature: "lesson.explain",
-        lessonText: "A force is a push or pull that can change motion.",
-        question: "What is a force?",
-      }));
-      const body = await response.json();
-      assertEquals(response.status, 200, "success status");
-      assert(body.ok === true, "success envelope");
-      assertEquals(
-        body.data.answer,
-        "A force is a push or pull that can change motion.",
-        "lesson explanation",
-      );
-      assertEquals(providerCalls(), 1, "provider calls");
-      assert(
-        providerRequest()?.includes("What is a force?"),
-        "the learner's question should be sent to the model",
-      );
-    },
+  assert(
+    !validateRequest({ feature: "quiz.generate", lessonId, count: 0 }),
+    "rejects zero questions",
   );
-});
-
-Deno.test("malformed model quiz output is rejected", async () => {
-  await withMockServices(
-    "teacher",
-    { AI_PROVIDER_APPROVED: "true" },
-    async () => {
-      const originalFetch = globalThis.fetch;
-      globalThis.fetch = async (input) => {
-        if (requestUrl(input).endsWith("/auth/v1/user")) {
-          return Response.json({
-            id: "test-user-123",
-            aud: "authenticated",
-            role: "authenticated",
-            app_metadata: {},
-            user_metadata: {},
-            created_at: "2026-01-01T00:00:00Z",
-          });
-        }
-        if (requestUrl(input).includes("/rest/v1/school_memberships?")) {
-          return Response.json([{ role: "teacher" }]);
-        }
-        return Response.json({
-          choices: [{ message: { content: "not valid quiz json" } }],
-        });
-      };
-      try {
-        const response = await handleRequest(post({
-          feature: "quiz.generate",
-          lessonText: "A force is a push or pull that can change motion.",
-          count: 1,
-        }));
-        const body = await response.json();
-        assertEquals(response.status, 502, "invalid model output status");
-        assertEquals(body.error.code, "AI_INVALID_RESPONSE", "error code");
-      } finally {
-        globalThis.fetch = originalFetch;
-      }
-    },
+  assert(
+    !validateRequest({ feature: "lesson.explain", lessonId, question: " " }),
+    "rejects blank question",
+  );
+  assert(
+    !validateRequest({
+      feature: "quiz.generate",
+      lessonId,
+      count: 2,
+      prompt: "ignored field",
+    }),
+    "rejects extra fields",
   );
 });

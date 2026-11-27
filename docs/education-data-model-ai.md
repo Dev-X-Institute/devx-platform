@@ -1,14 +1,12 @@
 # Education data model and AI interaction plan
 
-**Status:** The education foundation and shared `ai_tasks` lifecycle table are implemented. The durable Supabase `ai_tasks` queue is provisioned by `20261122130000_ai_tasks_queue.sql`; feature result tables, queue adapters, and app-specific task enqueue flows remain planned.
+**Status:** The education foundation, shared task lifecycle table, durable queue, `education-ai` enqueue RPC, Python queue consumer, worker authorization, and education task result table are implemented. The production provider and frontend task-status UI remain planned.
 
-This plan describes the education data that should exist before AI features use real school records, and how the `education-ai` Edge Function should read and write that data. The initial schema is in migrations; later feature tables still require decisions about tenancy, role, retention, and product behavior.
+This plan describes the education data that should exist before AI features use real school records, and how the `education-ai` enqueue function and shared worker interact with it. The initial schema is in migrations; later feature tables still require decisions about tenancy, role, retention, and product behavior.
 
 ## Current function boundary
 
-[`supabase/functions/education-ai/index.ts`](../supabase/functions/education-ai/index.ts) currently accepts caller-supplied `lessonText`, authenticates the Supabase user, reads active roles from that user's `school_memberships` rows under RLS, validates the request, and calls a configured OpenAI-compatible endpoint. `quiz.generate` is allowed when the user has a teacher/admin membership and returns a review-required draft; `lesson.explain` is allowed for student/teacher/admin memberships. The function does not scope the request to a particular school or course, persist drafts, or record AI task/usage rows.
-
-This is adequate for a scaffold using synthetic content. Before it handles real lessons or student records, the function should accept record identifiers and bounded feature parameters, then load content server-side after checking the caller's school and record access. A global role claim alone cannot represent a user who has different roles in different schools.
+[`supabase/functions/education-ai/index.ts`](../supabase/functions/education-ai/index.ts) authenticates the Supabase user, validates `lesson.explain` and `quiz.generate` inputs, and invokes the restricted enqueue RPC using a server-only service-role client. It does not read education data, check school roles, or call a provider. The RPC accepts the owner ID only from that trusted function path, creates the task, stores a short-lived feature input in `private.education_ai_task_inputs`, and queues only the task ID. The worker must resolve the lesson and its school/course, confirm the user's current access for that specific feature, load content, and then call the provider. A global role claim alone cannot represent a user who has different roles in different schools.
 
 ## Proposed logical model
 
@@ -37,6 +35,8 @@ This is a staged model, not a requirement to create every table at once. The ini
 | Entity | Purpose and boundary |
 | --- | --- |
 | `ai_tasks` | Implemented in `20261122120000_ai_tasks.sql`. One row per accepted operation: task and request IDs, optional idempotency key, app/feature/schema identifiers, optional school scope, creator, lifecycle status, source and result references, prompt/provider/model identifiers, bounded usage metadata, a safe failure code, attempt limits, deadlines, and lifecycle timestamps. It intentionally stores references rather than prompts, full lesson bodies, student names, generated prose, or chain-of-thought. |
+| `private.education_ai_task_inputs` | Implemented in `20261123090000_education_ai_enqueue.sql`. Holds only the lesson ID and bounded feature input until worker processing; the table is outside the Data API and has no client grants. Worker must delete the row after terminal processing. It must not be used for lesson bodies, names, or generated prose. |
+| `education_ai_task_results` | Implemented in `20261123100000_education_ai_task_results.sql`. Stores the typed answer/quiz output separately from generic task metadata. RLS lets the task owner read it only while they retain active school access. Quiz output remains review-required and unpublished. |
 | `quiz_drafts` and `report_comment_drafts` | Domain-specific editable output, linked to `ai_tasks` and source records. Include review state, creator/reviewer, reviewed/published timestamps, and the final destination reference. The generated text lives here if it must be retained; avoid duplicating it in generic task JSON. |
 | `ai_reviews` (optional) | Reviewer action and structured feedback category linked to the task/draft. Avoid free-form student data in feedback. Define access and retention before enabling this table. |
 | `notification_outbox` (later) | Durable delivery state for fee/attendance notifications: recipient relationship, approved template/version, minimal message parameters, idempotency key, due/sent times, attempts, and provider delivery ID. Keep it separate from AI tasks because message scheduling and delivery are deterministic operations. |
@@ -46,19 +46,19 @@ For an explanation request, persistence can be opt-in or omitted: return the ans
 
 ## Authorization and row-level security
 
-Treat school membership and relationship tables as the authorization source. The JWT identifies the user; the function/database then checks their active membership and role for the relevant `school_id`, course, lesson, and student. The current global `education_role` claim may be a coarse early scaffold, but should not authorize school-specific data by itself.
+Treat school membership and relationship tables as the authorization source. The JWT identifies the user. The enqueue function passes the verified user ID into a server-only RPC; the worker then checks active membership and role for the relevant `school_id`, course, lesson, and student before reading source data. The current global `education_role` claim may be a coarse early scaffold, but should not authorize school-specific data by itself.
 
 - Enable RLS for all user- or school-scoped tables. Include `school_id` checks and active membership checks in policies.
 - Students can read their own permitted learning records. Teachers can access learners only through courses they teach. School administrators are scoped to their own school.
 - Guardians can read only the records allowed by an active `student_guardians` link and the school's guardian policy; do not grant broad access to all students in a school.
 - Clients must not directly insert or update AI task status, generated drafts, approvals, or published assessment records. Route these transitions through the authorized Edge Function or a narrowly scoped server path.
 - The current `ai_tasks` read policies allow an owner with an active school membership to read their own school-scoped task, and an active school admin to read tasks for that school. Non-school tasks are owner-readable. Client insert/update/delete privileges are withheld.
-- A function should query with the caller's JWT/RLS context where practical. If a service-role client is needed for a worker, recheck task ownership, school scope, and current authorization in trusted code; never expose that key to the browser.
+- The enqueue function should use the caller JWT to verify identity. The worker may use a service-role or dedicated database credential; it must recheck task ownership, school scope, and current authorization in trusted code and never expose its credential to the browser.
 - Add indexes for common policy predicates and access paths: `(school_id, user_id, status)` on memberships, `(school_id, course_id, user_id, status)` on course memberships, `(school_id, student_id, submitted_at)` on attempts, and `(school_id, created_by, created_at)` on AI tasks. Confirm actual query plans when implementation begins.
 
-RLS policies and Edge Function checks are complementary. Realtime subscriptions are only a delivery mechanism; they do not grant permission to read a row.
+RLS policies and worker-side authorization checks are complementary. Realtime subscriptions are only a delivery mechanism; they do not grant permission to read a row.
 
-## Synchronous `education-ai` interaction
+## `education-ai` enqueue and worker interaction
 
 The planned request should identify the feature and source record, not carry trusted content or authorization claims. For example:
 
@@ -71,22 +71,18 @@ The planned request should identify the feature and source record, not carry tru
 }
 ```
 
-The function flow should be:
+The current enqueue flow is:
 
 1. Authenticate the Supabase access token and derive `user_id` from the verified session.
-2. Validate the feature payload, size limits, and idempotency key. Ignore client-supplied user ID, school ID, role, provider/model, and prompt.
-3. Resolve the lesson and its school/course on the server. Confirm active school membership and feature-specific access: teacher/admin course access for quiz generation; student enrollment (or teacher access) for lesson explanation.
-4. Load only the lesson revision/content needed. Minimize or redact incidental personal data before inference. Apply provider eligibility/approval, rate limits, and budgets before the call.
-5. Create an `ai_tasks`/`ai_runs` metadata row with a request ID and source references. Use a state that distinguishes the provider call from a persisted draft, so a failed model call cannot look successful.
-6. Call the approved provider, validate the structured output, and record safe usage/outcome metadata. Do not log raw lesson text, questions, answers, or provider error bodies.
-7. For quiz generation, write a `quiz_drafts` row linked to the task and lesson revision; return its ID and typed draft. Keep it unpublished until an authorized teacher reviews and explicitly approves it. For lesson explanation, return a typed answer; retain no content by default unless a separately approved feature requires it.
-8. Return the stable response envelope with `requestId` and result or safe error code. Make duplicate submissions idempotent so retries do not create duplicate drafts.
+2. Validate feature, lesson ID, feature parameters, body size, and optional idempotency key. Ignore client-supplied user ID, school ID, role, provider/model, and prompt.
+3. Call `enqueue_education_ai_task` from the Edge Function using its server-only service-role client. The RPC repeats input validation, accepts the verified owner ID from the trusted function, creates the `queued` task, stores minimal inputs in the private short-lived input table, and enqueues only `{ task_id }` in the same transaction. Browser roles cannot execute this RPC.
+4. Return `202 Accepted` with task and request IDs. Do not load school data or call a provider in the Edge Function.
 
-This changes the current `lessonText`-in-request approach: the function must read the source record after authorization. It also means the function should not rely on client-side `@devx/ai` types as a security boundary; server validation and database policies remain authoritative.
+The worker must then load the task and private input, check cancellation/deadline and the owner's current school/course/lesson permissions, retrieve the latest authorized lesson revision, and prepare a minimized provider request. It validates provider output, records safe usage and task state, writes a review-required quiz draft when applicable, and deletes the short-lived input after terminal processing. Duplicate queue delivery must not repeat side effects. The task read endpoint remains protected by RLS; the frontend polls or subscribes until the status is terminal.
 
 ## Long-running tasks and related features
 
-When work needs retries, progress, scheduled execution, or multiple bounded tool steps, use `ai_tasks` as the durable lifecycle record. The function creates the authorized task and queues only its ID plus non-sensitive routing metadata. A worker loads the task and minimum source records, verifies scope/status again, executes under a deadline/step/cost budget, then writes the result and terminal state. The frontend reads status and drafts through RLS-protected queries or an authorized endpoint. Queue delivery and task processing must be idempotent.
+All model work uses `ai_tasks` as the durable lifecycle record, even a single bounded provider call. The enqueue function creates the owner-bound task and queues only its ID. A worker loads the task and minimum source records, verifies scope/status, executes under a deadline/step/cost budget, then writes the result and terminal state. The frontend reads status and drafts through RLS-protected queries or an authorized endpoint. Queue delivery and task processing must be idempotent.
 
 Use the same education data foundation differently by feature:
 
@@ -107,4 +103,4 @@ Use the same education data foundation differently by feature:
 6. What are the retention and correction rules for attempts, attendance, fees, AI metadata, and delivery records?
 7. Which operations run synchronously, and which require a queue/worker, cancellation, retries, or review state?
 
-Resolve these in feature-specific decisions before adding result tables or connecting real student data to a model provider. Queue messages should contain only a `task_id`; the `ai_tasks` row remains the lifecycle source of truth. The queue is not exposed through the Data API, and no worker database adapter or Edge Function enqueue flow is implemented yet.
+Resolve these in feature-specific decisions before connecting real student data to a model provider. Queue messages contain only a `task_id`; the `ai_tasks` row remains the lifecycle source of truth. The worker consumer and education authorization path are implemented, but the worker deployment and frontend status/result flow remain. The input table's `expires_at` is not an automatic deletion policy; add an orphan-input cleanup job before production.
